@@ -1,8 +1,14 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field
+from pydantic import AnyHttpUrl, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+INSECURE_JWT_SECRETS = {
+    "development-only-jwt-secret-change-me",
+    "replace-with-a-long-random-secret-at-least-32-chars",
+}
 
 
 class Settings(BaseSettings):
@@ -18,13 +24,30 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://elite:elite@localhost:5432/elite"
     frontend_url: AnyHttpUrl = "http://localhost:3000"
     seed_password: str = Field(default="DevOnly123!", min_length=8)
+    jwt_secret: str = Field(
+        default="development-only-jwt-secret-change-me",
+        min_length=32,
+    )
+    jwt_algorithm: Literal["HS256"] = "HS256"
+    access_token_expire_minutes: int = Field(default=60, gt=0, le=1440)
+    ticketmaster_api_key: str | None = None
+    ticketmaster_base_url: AnyHttpUrl = "https://app.ticketmaster.com/discovery/v2/"
+    ticketmaster_timeout_seconds: float = Field(default=10, gt=0, le=30)
 
     @property
     def debug(self) -> bool:
         return self.environment == "development"
 
+    @model_validator(mode="after")
+    def reject_development_secret_in_production(self) -> "Settings":
+        if (
+            self.environment == "production"
+            and self.jwt_secret in INSECURE_JWT_SECRETS
+        ):
+            raise ValueError("JWT_SECRET must be configured in production")
+        return self
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

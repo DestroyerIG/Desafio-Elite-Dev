@@ -16,7 +16,7 @@ Elite Events adota um monólito modular. O backend concentra autenticação, aut
                                     └─────────────────────────┘
 ```
 
-A integração com Ticketmaster será feita pelo FastAPI. A chave externa nunca será exposta ao navegador, e eventos publicados serão copiados para o PostgreSQL para remover a dependência do catálogo durante a navegação pública.
+A integração com Ticketmaster é feita pelo FastAPI. A chave externa nunca é exposta ao navegador, e eventos publicados são copiados para o PostgreSQL para remover a dependência do catálogo durante a navegação pública.
 
 ## Backend
 
@@ -27,11 +27,13 @@ Os módulos de domínio seguem o fluxo `Router -> Service -> Repository -> Postg
 - Repository: consultas e persistência com SQLAlchemy.
 - Schemas: contratos de entrada e saída validados pelo Pydantic.
 
-O módulo de health já usa esse fluxo em versão mínima e executa `SELECT 1`, provando que a sessão assíncrona alcança o PostgreSQL.
+Na Fase 2, essa separação foi aplicada aos módulos `auth`, `catalog` e `events`. O `TicketmasterClient` fica na camada de integrações e o catálogo expõe apenas um DTO controlado pela aplicação.
+
+O JWT identifica usuário e papel, mas a autorização não confia apenas no token: a dependency carrega o usuário atual no PostgreSQL e os services verificam a propriedade do evento antes de editar ou excluir.
 
 ## Frontend
 
-O App Router organiza áreas pública, de cliente, de organizador e de portaria. A fundação da Fase 1 inclui apenas a página inicial e os diretórios compartilhados; as rotas de produto serão adicionadas com seus fluxos para evitar interfaces fictícias.
+O App Router já oferece página inicial, listagem e detalhe públicos, login e área do organizador. TanStack Query controla cache, carregamento, erros e invalidação após mutações; Zod valida os formulários antes de chamar a API. Áreas de cliente e portaria serão adicionadas junto aos fluxos correspondentes.
 
 ## Persistência
 
@@ -46,4 +48,3 @@ O schema inicial contém:
 - `ticket_validations`: trilha de auditoria da portaria.
 
 Constraints no PostgreSQL protegem unicidade, quantidades, preços e relações essenciais. Nas fases seguintes, locks pessimistas protegerão estoque e uso único do ingresso em cenários concorrentes.
-

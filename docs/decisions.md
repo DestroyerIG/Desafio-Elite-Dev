@@ -36,3 +36,20 @@ O backend aceita por padrão somente `http://localhost:3000`. A origem é config
 
 Somente exemplos de desenvolvimento são versionados. `.env`, JWT secret, ticket secret, senha de banco de produção e chave Ticketmaster ficam fora do repositório.
 
+## JWT curto e autorização no banco
+
+O token contém apenas `sub`, `role`, `iat` e `exp` e é assinado com HS256. A cada rota protegida, o backend valida assinatura e expiração, carrega o usuário e confirma que o papel do token ainda coincide com o banco. Isso permite revogar acesso removendo ou alterando o usuário sem depender apenas de uma afirmação antiga no JWT.
+
+Senhas usam Argon2. Cadastro público nunca aceita um papel informado pelo cliente e sempre cria `CUSTOMER`, impedindo autoelevação para `ORGANIZER` ou `GATE`.
+
+## Ticketmaster somente pelo backend
+
+O navegador consulta o catálogo por meio do FastAPI. O cliente HTTP adiciona a API key apenas no servidor, aplica timeout e traduz falhas externas para erros estáveis da aplicação. Logs detalhados de HTTPX foram reduzidos para evitar que a query string com `apikey` apareça nos logs.
+
+## Evento externo copiado para o PostgreSQL
+
+Na publicação, o backend busca o evento novamente pelo identificador externo e grava os campos normalizados localmente. A página pública lê apenas o PostgreSQL. Assim, indisponibilidade, mudança ou remoção no catálogo não quebra um evento já publicado.
+
+## Token no frontend
+
+O MVP guarda o JWT no `localStorage` e o envia como Bearer token. A decisão mantém o fluxo separado entre Next.js e FastAPI simples nesta etapa, mas aumenta o impacto potencial de XSS. Uma implantação com requisitos de segurança mais altos deve avaliar cookie `HttpOnly`, proteção CSRF e uma camada BFF.

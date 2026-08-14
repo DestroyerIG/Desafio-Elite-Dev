@@ -1,6 +1,7 @@
 from typing import Any
 
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 
@@ -19,3 +20,16 @@ async def app_error_handler(_request: Request, exc: Exception) -> JSONResponse:
     }
     return JSONResponse(status_code=app_error.status_code, content=content)
 
+
+async def validation_error_handler(
+    _request: Request, _exc: RequestValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Os dados enviados são inválidos.",
+            }
+        },
+    )
