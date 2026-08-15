@@ -44,3 +44,17 @@ export interface CatalogEvent {
   event_date: string;
 }
 
+export type ReservationStatus = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED";
+
+export interface Reservation {
+  id: string;
+  customer_id: string;
+  event_id: string;
+  quantity: number;
+  unit_price: string;
+  total_amount: string;
+  status: ReservationStatus;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

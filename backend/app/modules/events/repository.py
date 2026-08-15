@@ -42,10 +42,12 @@ async def get_organizer_event(
     session: AsyncSession, event_id: UUID, organizer_id: UUID
 ) -> Event | None:
     return await session.scalar(
-        select(Event).where(
+        select(Event)
+        .where(
             Event.id == event_id,
             Event.organizer_id == organizer_id,
         )
+        .with_for_update()
     )
 
 
@@ -66,4 +68,3 @@ async def add_event(session: AsyncSession, event: Event) -> Event:
     await session.flush()
     await session.refresh(event)
     return event
-

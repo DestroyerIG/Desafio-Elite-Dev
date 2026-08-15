@@ -1,14 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { EventArtwork } from "@/components/events/event-artwork";
+import { buttonVariants } from "@/components/ui/button";
 import { ErrorMessage, LoadingState } from "@/components/ui/feedback";
+import { useAuth } from "@/hooks/use-auth";
 import { ApiError } from "@/services/api";
 import { getEvent } from "@/services/events";
+import { cn } from "@/utils/cn";
 import { formatCurrency, formatDate } from "@/utils/format";
 
 export function EventDetails({ eventId }: { eventId: string }) {
+  const { user } = useAuth();
   const eventQuery = useQuery({
     queryKey: ["events", eventId],
     queryFn: () => getEvent(eventId),
@@ -67,12 +72,30 @@ export function EventDetails({ eventId }: { eventId: string }) {
               </dd>
             </div>
           </dl>
-          <p className="mt-6 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
-            A reserva será disponibilizada na próxima fase do projeto.
-          </p>
+          <div className="mt-6 border-t border-slate-200 pt-5">
+            {event.available_tickets === 0 ? (
+              <p className="rounded-md bg-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-600">
+                Evento esgotado
+              </p>
+            ) : user && user.role !== "CUSTOMER" ? (
+              <p className="text-xs leading-5 text-slate-500">
+                Entre com uma conta de cliente para reservar ingressos.
+              </p>
+            ) : (
+              <Link
+                href={
+                  user
+                    ? `/checkout/${event.id}`
+                    : `/login?next=/checkout/${event.id}`
+                }
+                className={cn(buttonVariants(), "w-full")}
+              >
+                Reservar ingressos
+              </Link>
+            )}
+          </div>
         </aside>
       </div>
     </article>
   );
 }
-

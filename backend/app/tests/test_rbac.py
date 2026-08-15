@@ -57,3 +57,30 @@ async def test_customer_cannot_create_event() -> None:
         }
     }
 
+
+@pytest.mark.asyncio
+async def test_organizer_cannot_create_reservation() -> None:
+    organizer = User(
+        id=uuid4(),
+        name="Organizador",
+        email="organizer@test.local",
+        password_hash="not-used",
+        role=UserRole.ORGANIZER,
+    )
+    app.dependency_overrides[get_current_user] = lambda: organizer
+    app.dependency_overrides[get_db_session] = override_session
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.post(
+                f"/api/v1/events/{uuid4()}/reservations",
+                json={"quantity": 1},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"
