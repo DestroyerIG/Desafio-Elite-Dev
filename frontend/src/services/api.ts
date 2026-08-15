@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const ACCESS_TOKEN_KEY = "elite-events-access-token";
 const tokenListeners = new Set<() => void>();
 
@@ -75,4 +75,28 @@ export async function apiRequest<T>(
 
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+export async function apiBlobRequest(
+  path: string,
+  token = getAccessToken(),
+): Promise<Blob> {
+  const headers = new Headers({ Accept: "image/png" });
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_URL}${path}`, { headers });
+  if (!response.ok) {
+    let body: ApiErrorBody = {};
+    try {
+      body = (await response.json()) as ApiErrorBody;
+    } catch {
+      // Mantém uma mensagem segura quando o servidor não retorna JSON.
+    }
+    throw new ApiError(
+      body.error?.code ?? "REQUEST_FAILED",
+      body.error?.message ?? "Não foi possível carregar a imagem.",
+      response.status,
+    );
+  }
+  return response.blob();
 }

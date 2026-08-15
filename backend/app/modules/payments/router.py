@@ -1,0 +1,51 @@
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.session import get_db_session
+from app.models.enums import UserRole
+from app.models.user import User
+from app.modules.auth.dependencies import require_roles
+from app.modules.payments.gateway import PaymentGateway, get_payment_gateway
+from app.modules.payments.schemas import PaymentCreate, PaymentResponse
+from app.modules.payments.service import pay_reservation
+
+
+router = APIRouter(prefix="/api/v1", tags=["payments"])
+DatabaseSession = Annotated[AsyncSession, Depends(get_db_session)]
+Customer = Annotated[User, Depends(require_roles(UserRole.CUSTOMER))]
+Gateway = Annotated[PaymentGateway, Depends(get_payment_gateway)]
+
+
+@router.post(
+    "/reservations/{reservation_id}/payments",
+    response_model=PaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_payment(
+    reservation_id: UUID,
+    data: PaymentCreate,
+    session: DatabaseSession,
+    customer: Customer,
+    gateway: Gateway,
+) -> PaymentResponse:
+    outcome = await pay_reservation(
+        session,
+        customer,
+        reservation_id,
+        data,
+        gateway,
+    )
+    return PaymentResponse(
+        id=outcome.payment.id,
+        reservation_id=outcome.payment.reservation_id,
+        amount=outcome.payment.amount,
+        status=outcome.payment.status,
+        provider=outcome.payment.provider,
+        failure_reason=outcome.payment.failure_reason,
+        tickets_created=outcome.tickets_created,
+        created_at=outcome.payment.created_at,
+        updated_at=outcome.payment.updated_at,
+    )

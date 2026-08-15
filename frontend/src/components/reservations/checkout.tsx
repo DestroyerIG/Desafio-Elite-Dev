@@ -10,10 +10,15 @@ import { ErrorMessage, LoadingState } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
+import { paymentSchema } from "@/schemas/payments";
 import { reservationSchema } from "@/schemas/reservations";
 import { ApiError } from "@/services/api";
 import { getEvent } from "@/services/events";
-import { cancelReservation, createReservation } from "@/services/reservations";
+import { payReservation } from "@/services/payments";
+import {
+  cancelReservation,
+  createReservation,
+} from "@/services/reservations";
 import type { Reservation } from "@/types/api";
 import { cn } from "@/utils/cn";
 import { formatCurrency, formatDate } from "@/utils/format";
@@ -23,14 +28,18 @@ export function Checkout({ eventId }: { eventId: string }) {
   const queryClient = useQueryClient();
   const { user, isLoading: authIsLoading } = useAuth();
   const [quantity, setQuantity] = useState("1");
+  const [cardNumber, setCardNumber] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const isCustomer = user?.role === "CUSTOMER";
 
   useEffect(() => {
     if (authIsLoading) return;
-    if (!user) router.replace(`/login?next=/checkout/${eventId}`);
-    else if (!isCustomer) router.replace(`/events/${eventId}`);
+    if (!user) {
+      router.replace(`/login?next=/checkout/${eventId}`);
+    } else if (!isCustomer) {
+      router.replace(`/events/${eventId}`);
+    }
   }, [authIsLoading, eventId, isCustomer, router, user]);
 
   const eventQuery = useQuery({
@@ -51,6 +60,22 @@ export function Checkout({ eventId }: { eventId: string }) {
     onSuccess: async (cancelledReservation) => {
       setReservation(cancelledReservation);
       await queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
+  });
+  const paymentMutation = useMutation({
+    mutationFn: ({
+      reservationId,
+      normalizedCardNumber,
+    }: {
+      reservationId: string;
+      normalizedCardNumber: string;
+    }) => payReservation(reservationId, normalizedCardNumber),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["events"] }),
+        queryClient.invalidateQueries({ queryKey: ["tickets"] }),
+      ]);
+      router.push("/my-tickets");
     },
   });
 
@@ -77,7 +102,8 @@ export function Checkout({ eventId }: { eventId: string }) {
   const estimatedTotal = Number.isFinite(parsedQuantity)
     ? Number(event.ticket_price) * parsedQuantity
     : 0;
-  const requestError = createMutation.error ?? cancelMutation.error;
+  const requestError =
+    createMutation.error ?? cancelMutation.error ?? paymentMutation.error;
 
   function handleSubmit(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
@@ -94,13 +120,36 @@ export function Checkout({ eventId }: { eventId: string }) {
     createMutation.mutate(result.data.quantity);
   }
 
+  function handlePayment(formEvent: FormEvent<HTMLFormElement>) {
+    formEvent.preventDefault();
+    if (!reservation) return;
+    setFormError(null);
+    const result = paymentSchema.safeParse({ cardNumber });
+    if (!result.success) {
+      setFormError(result.error.issues[0]?.message ?? "Revise o cartão.");
+      return;
+    }
+    paymentMutation.mutate({
+      reservationId: reservation.id,
+      normalizedCardNumber: result.data.cardNumber,
+    });
+  }
+
   if (reservation) {
     const wasCancelled = reservation.status === "CANCELLED";
+    const wasPaid = reservation.status === "PAID";
+    const paymentWasDeclined =
+      paymentMutation.error instanceof ApiError &&
+      paymentMutation.error.code === "PAYMENT_DECLINED";
     return (
       <main className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-            {wasCancelled ? "Reserva cancelada" : "Reserva confirmada"}
+            {wasCancelled
+              ? "Reserva cancelada"
+              : wasPaid
+                ? "Pagamento aprovado"
+                : "Reserva confirmada"}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
             {event.title}
@@ -108,8 +157,11 @@ export function Checkout({ eventId }: { eventId: string }) {
           <p className="mt-3 leading-7 text-slate-600">
             {wasCancelled
               ? "Os ingressos foram devolvidos à disponibilidade do evento."
-              : "O estoque foi separado com segurança. O pagamento será habilitado na próxima fase."}
+              : wasPaid
+                ? "Seus ingressos foram emitidos e já estão disponíveis."
+                : "O estoque foi separado. Conclua o pagamento simulado para emitir seus ingressos."}
           </p>
+
           <dl className="mt-8 grid gap-5 border-y border-slate-100 py-6 text-sm sm:grid-cols-2">
             <div>
               <dt className="font-medium text-slate-500">Código da reserva</dt>
@@ -119,9 +171,7 @@ export function Checkout({ eventId }: { eventId: string }) {
             </div>
             <div>
               <dt className="font-medium text-slate-500">Status</dt>
-              <dd className="mt-1 font-semibold text-slate-900">
-                {reservation.status}
-              </dd>
+              <dd className="mt-1 font-semibold text-slate-900">{reservation.status}</dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Quantidade</dt>
@@ -134,6 +184,48 @@ export function Checkout({ eventId }: { eventId: string }) {
               </dd>
             </div>
           </dl>
+
+          {!wasCancelled && !wasPaid && (
+            <form
+              onSubmit={handlePayment}
+              className="mt-6 rounded-lg border border-blue-100 bg-blue-50/50 p-5"
+            >
+              <h2 className="font-semibold text-slate-950">Pagamento simulado</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Use 4242 4242 4242 4242 para aprovar. Números terminados em
+                0000 são recusados. O número não é armazenado.
+              </p>
+              <div className="mt-4 space-y-2">
+                <Label htmlFor="card-number">Número do cartão de teste</Label>
+                <Input
+                  id="card-number"
+                  name="card-number"
+                  inputMode="numeric"
+                  autoComplete="cc-number"
+                  placeholder="4242 4242 4242 4242"
+                  value={cardNumber}
+                  onChange={(inputEvent) => setCardNumber(inputEvent.target.value)}
+                  disabled={paymentMutation.isPending || paymentWasDeclined}
+                />
+              </div>
+              {paymentWasDeclined && (
+                <p className="mt-3 text-sm leading-6 text-slate-700">
+                  Para tentar outro cartão, cancele esta reserva e inicie uma nova.
+                </p>
+              )}
+              {formError && <ErrorMessage message={formError} className="mt-4" />}
+              <Button
+                type="submit"
+                className="mt-4 w-full sm:w-auto"
+                disabled={paymentMutation.isPending || paymentWasDeclined}
+              >
+                {paymentMutation.isPending
+                  ? "Processando..."
+                  : "Pagar e emitir ingressos"}
+              </Button>
+            </form>
+          )}
+
           {requestError && (
             <ErrorMessage
               className="mt-5"
@@ -151,11 +243,16 @@ export function Checkout({ eventId }: { eventId: string }) {
             >
               Voltar ao evento
             </Link>
-            {!wasCancelled && (
+            {wasPaid && (
+              <Link href="/my-tickets" className={cn(buttonVariants())}>
+                Ver meus ingressos
+              </Link>
+            )}
+            {!wasCancelled && !wasPaid && (
               <Button
                 type="button"
                 variant="danger"
-                disabled={cancelMutation.isPending}
+                disabled={cancelMutation.isPending || paymentMutation.isPending}
                 onClick={() => cancelMutation.mutate(reservation.id)}
               >
                 {cancelMutation.isPending ? "Cancelando..." : "Cancelar reserva"}
@@ -170,19 +267,13 @@ export function Checkout({ eventId }: { eventId: string }) {
   return (
     <main className="mx-auto grid max-w-5xl gap-8 px-5 py-10 sm:px-8 sm:py-14 lg:grid-cols-[1fr_22rem]">
       <section>
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-          Checkout
-        </p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Checkout</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
           Reserve seus ingressos
         </h1>
         <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-blue-700">
-            {formatDate(event.event_date)}
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-slate-950">
-            {event.title}
-          </h2>
+          <p className="text-sm font-medium text-blue-700">{formatDate(event.event_date)}</p>
+          <h2 className="mt-2 text-xl font-semibold text-slate-950">{event.title}</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {event.venue_name} · {event.venue_address}
           </p>

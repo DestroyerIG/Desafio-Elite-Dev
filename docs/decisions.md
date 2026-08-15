@@ -53,3 +53,35 @@ Na publicação, o backend busca o evento novamente pelo identificador externo e
 ## Token no frontend
 
 O MVP guarda o JWT no `localStorage` e o envia como Bearer token. A decisão mantém o fluxo separado entre Next.js e FastAPI simples nesta etapa, mas aumenta o impacto potencial de XSS. Uma implantação com requisitos de segurança mais altos deve avaliar cookie `HttpOnly`, proteção CSRF e uma camada BFF.
+
+## Reserva com `SELECT FOR UPDATE`
+
+A criação da reserva lê o evento publicado com lock pessimista. Enquanto a transação valida e reduz `available_tickets`, outra reserva para o mesmo evento espera. Quando prossegue, a segunda transação enxerga o estoque já confirmado e falha com `409` se não houver quantidade suficiente. Uma verificação somente no frontend ou um `SELECT` sem lock permitiria que duas requisições consumissem o mesmo último ingresso.
+
+Edição e exclusão pelo organizador usam o mesmo lock da linha do evento. Isso evita que uma alteração concorrente de capacidade sobrescreva a redução realizada por uma reserva.
+
+## Cancelamento idempotente e ordem de locks
+
+Cancelamento bloqueia primeiro o evento e depois a reserva. Manter uma ordem estável reduz o risco de deadlock com outros fluxos. A releitura bloqueada força `populate_existing`, pois uma instância previamente carregada no identity map do SQLAlchemy poderia conservar um status antigo após esperar pelo lock.
+
+Cancelar novamente uma reserva já `CANCELLED` não devolve estoque outra vez. O preço unitário e o total permanecem congelados na reserva para que mudanças futuras no preço do evento não alterem a intenção de compra existente.
+
+## Sem expiração automática nesta fase
+
+`expires_at` permanece nulo. Expirar reservas exigiria um processo confiável para localizar pendências e devolver estoque exatamente uma vez. O roadmap orienta adiar essa automação até o MVP principal estar completo; nesta fase, a liberação ocorre apenas por cancelamento explícito.
+
+## Gateway de pagamento substituível
+
+O service depende do contrato `PaymentGateway`; a Fase 4 fornece apenas `FakePaymentGateway`. Cartões de teste terminados em `0000` são recusados e os demais números válidos são aprovados. O número completo existe apenas no objeto de entrada durante a autorização: não há coluna, log ou resposta que o persista.
+
+## Pagamento e emissão na mesma transação
+
+O pagamento bloqueia a reserva com `SELECT FOR UPDATE`. Aprovação, mudança para `PAID` e criação de N tickets são confirmadas juntas; qualquer erro reverte tudo. Isso impede uma reserva paga sem todos os ingressos ou ingressos sem pagamento aprovado. A relação única entre pagamento e reserva, combinada ao lock, torna repetições de uma aprovação idempotentes e evita emissão duplicada.
+
+O schema atual representa uma tentativa por reserva. Por isso, uma recusa é registrada e não é sobrescrita por outro cartão; o cliente pode cancelar e iniciar uma nova reserva. Suportar múltiplas tentativas exigiria mudar conscientemente a cardinalidade e o histórico em migration futura.
+
+## QR assinado e hash persistido
+
+O conteúdo do QR é um JWT HS256 contendo somente `ticket_id`, `event_id` e `type=ticket`, assinado por `TICKET_SECRET`, separado do segredo de autenticação. O banco guarda apenas SHA-256 do token. Ao solicitar o PNG autenticado, o backend recria o token determinístico e compara seu hash em tempo constante antes de gerar a imagem.
+
+UUID puro permitiria fabricar códigos visualmente plausíveis; a assinatura comprova origem e integridade. O estado do ticket continua no PostgreSQL, portanto a assinatura não substitui a verificação transacional que será implementada na portaria. Como trade-off, rotacionar o segredo atual invalida a regeneração dos QRs existentes sem uma estratégia de versionamento ou reemissão.

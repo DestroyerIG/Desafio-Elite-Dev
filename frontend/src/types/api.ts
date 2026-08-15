@@ -58,3 +58,39 @@ export interface Reservation {
   created_at: string;
   updated_at: string;
 }
+
+export type PaymentStatus = "APPROVED" | "DECLINED";
+
+export interface Payment {
+  id: string;
+  reservation_id: string;
+  amount: string;
+  status: PaymentStatus;
+  provider: string;
+  failure_reason: string | null;
+  tickets_created: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TicketStatus = "ACTIVE" | "USED" | "CANCELLED";
+
+export interface TicketEvent {
+  id: string;
+  title: string;
+  image_url: string | null;
+  venue_name: string;
+  venue_address: string;
+  event_date: string;
+}
+
+export interface Ticket {
+  id: string;
+  reservation_id: string;
+  event_id: string;
+  public_code: string;
+  status: TicketStatus;
+  used_at: string | null;
+  created_at: string;
+  event: TicketEvent;
+}

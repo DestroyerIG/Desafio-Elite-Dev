@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
@@ -44,3 +45,30 @@ def decode_access_token(token: str) -> dict[str, Any]:
         algorithms=[settings.jwt_algorithm],
         options={"require": ["sub", "role", "exp"]},
     )
+
+
+def create_ticket_token(ticket_id: UUID, event_id: UUID) -> str:
+    settings = get_settings()
+    payload = {
+        "ticket_id": str(ticket_id),
+        "event_id": str(event_id),
+        "type": "ticket",
+    }
+    return jwt.encode(payload, settings.ticket_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_ticket_token(token: str) -> dict[str, Any]:
+    settings = get_settings()
+    payload = jwt.decode(
+        token,
+        settings.ticket_secret,
+        algorithms=[settings.jwt_algorithm],
+        options={"require": ["ticket_id", "event_id", "type"]},
+    )
+    if payload["type"] != "ticket":
+        raise jwt.InvalidTokenError("Invalid ticket token type")
+    return payload
+
+
+def hash_ticket_token(token: str) -> str:
+    return sha256(token.encode("utf-8")).hexdigest()

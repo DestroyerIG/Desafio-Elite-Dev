@@ -13,7 +13,9 @@ from app.modules.auth.router import router as auth_router
 from app.modules.catalog.router import router as catalog_router
 from app.modules.events.router import organizer_router, router as events_router
 from app.modules.health.router import router as health_router
+from app.modules.payments.router import router as payments_router
 from app.modules.reservations.router import router as reservations_router
+from app.modules.tickets.router import router as tickets_router
 
 
 def create_app() -> FastAPI:
@@ -40,6 +42,8 @@ def create_app() -> FastAPI:
     application.include_router(events_router)
     application.include_router(organizer_router)
     application.include_router(reservations_router)
+    application.include_router(payments_router)
+    application.include_router(tickets_router)
     return application
 
 

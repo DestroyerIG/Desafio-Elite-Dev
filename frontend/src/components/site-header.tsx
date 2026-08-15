@@ -28,6 +28,14 @@ export function SiteHeader() {
               Área do organizador
             </Link>
           )}
+          {user?.role === "CUSTOMER" && (
+            <Link
+              href="/my-tickets"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+            >
+              Meus ingressos
+            </Link>
+          )}
           {!isLoading && !user && (
             <Link href="/login" className={cn(buttonVariants({ size: "sm" }))}>
               Entrar
@@ -47,4 +55,3 @@ export function SiteHeader() {
     </header>
   );
 }
-

@@ -9,6 +9,10 @@ INSECURE_JWT_SECRETS = {
     "development-only-jwt-secret-change-me",
     "replace-with-a-long-random-secret-at-least-32-chars",
 }
+INSECURE_TICKET_SECRETS = {
+    "development-only-ticket-secret-change-me",
+    "replace-with-an-independent-long-random-secret",
+}
 
 
 class Settings(BaseSettings):
@@ -30,6 +34,10 @@ class Settings(BaseSettings):
     )
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: int = Field(default=60, gt=0, le=1440)
+    ticket_secret: str = Field(
+        default="development-only-ticket-secret-change-me",
+        min_length=32,
+    )
     ticketmaster_api_key: str | None = None
     ticketmaster_base_url: AnyHttpUrl = "https://app.ticketmaster.com/discovery/v2/"
     ticketmaster_timeout_seconds: float = Field(default=10, gt=0, le=30)
@@ -45,6 +53,11 @@ class Settings(BaseSettings):
             and self.jwt_secret in INSECURE_JWT_SECRETS
         ):
             raise ValueError("JWT_SECRET must be configured in production")
+        if (
+            self.environment == "production"
+            and self.ticket_secret in INSECURE_TICKET_SECRETS
+        ):
+            raise ValueError("TICKET_SECRET must be configured in production")
         return self
 
 

@@ -2,7 +2,7 @@
 
 O desenvolvimento deste projeto teve assistência do OpenAI Codex.
 
-Até a Fase 2, a IA foi usada para:
+Até a Fase 4, a IA foi usada para:
 
 - ler e organizar os requisitos do roadmap;
 - propor a estrutura inicial do repositório;
@@ -12,6 +12,14 @@ Até a Fase 2, a IA foi usada para:
 - consultar a documentação oficial dos frameworks e da Ticketmaster;
 - auxiliar a implementação e revisão de autenticação, RBAC e integração externa;
 - construir os fluxos públicos e do organizador no frontend;
-- criar testes unitários e integrados e diagnosticar inconsistências nos dados de seed.
+- criar testes unitários e integrados e diagnosticar inconsistências nos dados de seed;
+- implementar o fluxo transacional de reservas e revisar a ordem de locks;
+- construir o checkout do cliente e seus estados de confirmação e cancelamento;
+- elaborar e executar testes concorrentes reais contra PostgreSQL;
+- diagnosticar reutilização de conexões entre event loops e estado antigo no identity map do SQLAlchemy.
+- implementar a abstração de pagamento simulado e revisar a atomicidade entre pagamento e emissão;
+- estruturar tokens de ingresso assinados, persistência por hash e geração autenticada de QR;
+- criar a área de ingressos no frontend com carregamento seguro da imagem protegida;
+- ampliar testes para recusa, quantidade exata, idempotência, propriedade e adulteração de token.
 
 As sugestões precisam ser revisadas como qualquer contribuição de código. Decisões de produto, credenciais reais e aprovação para avançar entre fases continuam sob controle do responsável pelo projeto.
