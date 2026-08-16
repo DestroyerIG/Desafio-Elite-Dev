@@ -15,8 +15,8 @@ from app.modules.payments.gateway import PaymentGateway
 from app.modules.payments.repository import (
     add_payment,
     add_tickets,
-    count_tickets_for_reservation,
-    get_payment_by_reservation,
+    get_approved_payment,
+    list_ticket_ids_for_reservation,
 )
 from app.modules.payments.schemas import PaymentCreate
 from app.modules.reservations.repository import get_customer_reservation
@@ -25,7 +25,11 @@ from app.modules.reservations.repository import get_customer_reservation
 @dataclass(frozen=True, slots=True)
 class PaymentOutcome:
     payment: Payment
-    tickets_created: int
+    ticket_ids: list[UUID]
+
+    @property
+    def tickets_created(self) -> int:
+        return len(self.ticket_ids)
 
 
 def _new_public_code() -> str:
@@ -75,20 +79,25 @@ async def pay_reservation(
         if reservation is None:
             raise AppError("RESERVATION_NOT_FOUND", "Reserva não encontrada.", 404)
 
-        existing_payment = await get_payment_by_reservation(session, reservation.id)
-        if existing_payment is not None:
-            tickets_created = await count_tickets_for_reservation(
+        if reservation.status == ReservationStatus.PAID:
+            approved_payment = await get_approved_payment(session, reservation.id)
+            if approved_payment is None:
+                raise AppError(
+                    "PAYMENT_STATE_INVALID",
+                    "A reserva paga não possui um pagamento aprovado.",
+                    409,
+                )
+            ticket_ids = await list_ticket_ids_for_reservation(
                 session, reservation.id
             )
-            if existing_payment.status == PaymentStatus.APPROVED:
-                await session.commit()
-                return PaymentOutcome(existing_payment, tickets_created)
+            if not ticket_ids:
+                raise AppError(
+                    "PAYMENT_STATE_INVALID",
+                    "A reserva paga não possui ingressos emitidos.",
+                    409,
+                )
             await session.commit()
-            raise AppError(
-                "PAYMENT_DECLINED",
-                existing_payment.failure_reason or "Pagamento recusado.",
-                402,
-            )
+            return PaymentOutcome(approved_payment, ticket_ids)
 
         if reservation.status != ReservationStatus.PENDING:
             raise AppError(
@@ -128,7 +137,7 @@ async def pay_reservation(
         await add_tickets(session, tickets)
         await session.commit()
         await session.refresh(payment)
-        return PaymentOutcome(payment, len(tickets))
+        return PaymentOutcome(payment, sorted(ticket.id for ticket in tickets))
     except AppError:
         await session.rollback()
         raise

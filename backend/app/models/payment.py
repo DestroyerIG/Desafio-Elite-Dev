@@ -19,7 +19,7 @@ class Payment(TimestampMixin, Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     reservation_id: Mapped[UUID] = mapped_column(
-        ForeignKey("reservations.id", ondelete="RESTRICT"), unique=True, nullable=False
+        ForeignKey("reservations.id", ondelete="RESTRICT"), index=True, nullable=False
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     status: Mapped[PaymentStatus] = mapped_column(
@@ -28,5 +28,4 @@ class Payment(TimestampMixin, Base):
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     failure_reason: Mapped[str | None] = mapped_column(Text)
 
-    reservation: Mapped["Reservation"] = relationship(back_populates="payment")
-
+    reservation: Mapped["Reservation"] = relationship(back_populates="payments")

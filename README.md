@@ -4,7 +4,7 @@
 
 Plataforma full-stack de eventos e ingressos do Desafio Elite Dev 2026. O MVP será desenvolvido em fases e cobrirá publicação de eventos, reserva com proteção contra overselling, pagamento simulado, emissão de ingressos individuais, QR assinado, compartilhamento e validação na portaria.
 
-Ao final da Fase 4, o repositório contém autenticação JWT com RBAC, catálogo externo da Ticketmaster, publicação de cópias locais de eventos, reservas protegidas contra overselling, pagamento simulado e emissão de ingressos individuais com QR assinado. O Next.js oferece as experiências pública, do organizador, checkout do cliente e a área "Meus ingressos". Portaria e compartilhamento permanecem para a próxima fase.
+Ao final da Fase 4, o repositório contém autenticação JWT com RBAC, catálogo externo da Ticketmaster, publicação de cópias locais de eventos, reservas protegidas contra overselling, pagamento simulado e emissão de ingressos individuais com QR assinado. O Next.js oferece as experiências pública, do organizador, checkout do cliente e as áreas "Minhas reservas" e "Meus ingressos". Portaria e compartilhamento permanecem para a próxima fase.
 
 ## Arquitetura
 
@@ -84,6 +84,7 @@ PATCH  /api/v1/events/{id}
 DELETE /api/v1/events/{id}
 GET    /api/v1/organizer/events
 POST   /api/v1/events/{id}/reservations
+GET    /api/v1/me/reservations
 GET    /api/v1/reservations/{id}
 POST   /api/v1/reservations/{id}/cancel
 POST   /api/v1/reservations/{id}/payments
@@ -92,9 +93,9 @@ GET    /api/v1/tickets/{id}
 GET    /api/v1/tickets/{id}/qr
 ```
 
-Cadastro público sempre cria um `CUSTOMER`. Pesquisa no catálogo e mutações de eventos exigem um JWT de `ORGANIZER`; a listagem e o detalhe de eventos publicados são públicos. Somente o `CUSTOMER` proprietário acessa, cancela ou paga uma reserva e consulta seus ingressos.
+Cadastro público sempre cria um `CUSTOMER`. Pesquisa no catálogo e mutações de eventos exigem um JWT de `ORGANIZER`; a listagem e o detalhe de eventos publicados são públicos. Somente o `CUSTOMER` proprietário lista, acessa, cancela ou paga suas reservas e consulta seus ingressos.
 
-O gateway de pagamento é simulado. O cartão de teste `4242 4242 4242 4242` é aprovado; números terminados em `0000` são recusados. O número é usado somente durante a chamada e não é persistido. Uma recusa fica registrada nessa reserva; para tentar novamente, cancele-a e crie uma nova.
+O gateway de pagamento é simulado. O cartão de teste `4242 4242 4242 4242` é aprovado; números terminados em `0000` são recusados. O número é usado somente durante a chamada e não é persistido. Cada tentativa fica registrada. Depois de uma recusa, a reserva continua `PENDING` e pode ser retomada em "Minhas reservas" com outro cartão. O estoque permanece reservado até o pagamento ou cancelamento manual, e ingressos são emitidos somente após a aprovação. A resposta aprovada informa os IDs emitidos e o checkout abre diretamente o primeiro ingresso com seu QR; os demais permanecem em "Meus ingressos".
 
 ## Migrations
 
@@ -128,7 +129,7 @@ python -m pip install -r requirements-dev.txt
 pytest -q
 ```
 
-O teste ponta a ponta do backend é opt-in porque cria dados em um PostgreSQL isolado. Aponte `DATABASE_URL` para essa base, execute migration e seed, defina `RUN_INTEGRATION_TESTS=1` e rode `pytest -q` novamente. Nunca use uma base com dados importantes. A suíte comprova reserva concorrente sem overselling, pagamento recusado sem ingresso, pagamento aprovado com exatamente N ingressos, idempotência e acesso protegido ao QR.
+O teste ponta a ponta do backend é opt-in porque cria dados em um PostgreSQL isolado. Aponte `DATABASE_URL` para essa base, execute migration e seed, defina `RUN_INTEGRATION_TESTS=1` e rode `pytest -q` novamente. Nunca use uma base com dados importantes. A suíte comprova reserva concorrente sem overselling, pagamento recusado sem ingresso, nova tentativa aprovada na mesma reserva, histórico privado de reservas, pagamento concorrente sem duplicação, emissão de exatamente N ingressos e acesso protegido ao QR.
 
 No frontend:
 
@@ -147,7 +148,7 @@ O uso de assistência por IA está descrito com transparência em [docs/ai-usage
 - O Compose executa apenas o PostgreSQL; backend e frontend rodam localmente para agilizar o desenvolvimento.
 - O token JWT é mantido em `localStorage` neste MVP. Isso simplifica o cliente, mas exige disciplina contra XSS; uma evolução para produção pode usar cookie `HttpOnly` com proteção CSRF ou um BFF.
 - Sem `TICKETMASTER_API_KEY`, o catálogo retorna um erro de configuração explícito; eventos locais publicados continuam disponíveis.
-- O pagamento é deliberadamente simulado e existe uma única tentativa registrada por reserva; uma recusa exige cancelar e criar nova reserva.
+- O pagamento é deliberadamente simulado. Todas as tentativas são registradas, mas nenhum dado de cartão é persistido; uma recusa mantém a reserva pendente para nova tentativa.
 - O QR é gerado sob demanda a partir de um JWT assinado; somente seu hash é persistido. Rotação de `TICKET_SECRET` exige uma estratégia de reemissão, ainda fora do MVP.
 - Portaria e compartilhamento ainda não estão implementados.
 - Reservas permanecem `PENDING` até pagamento ou cancelamento manual. A expiração automática foi conscientemente adiada até o MVP principal estar completo.

@@ -24,3 +24,18 @@ class ReservationResponse(BaseModel):
     expires_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class ReservationEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    title: str
+    image_url: str | None
+    venue_name: str
+    venue_address: str
+    event_date: datetime
+
+
+class CustomerReservationResponse(ReservationResponse):
+    event: ReservationEventResponse

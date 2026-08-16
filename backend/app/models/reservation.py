@@ -45,6 +45,5 @@ class Reservation(TimestampMixin, Base):
 
     customer: Mapped["User"] = relationship(back_populates="reservations")
     event: Mapped["Event"] = relationship(back_populates="reservations")
-    payment: Mapped["Payment | None"] = relationship(back_populates="reservation", uselist=False)
+    payments: Mapped[list["Payment"]] = relationship(back_populates="reservation")
     tickets: Mapped[list["Ticket"]] = relationship(back_populates="reservation")
-

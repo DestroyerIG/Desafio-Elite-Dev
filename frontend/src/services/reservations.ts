@@ -1,5 +1,9 @@
 import { apiRequest } from "@/services/api";
-import type { Reservation } from "@/types/api";
+import type { CustomerReservation, Reservation } from "@/types/api";
+
+export function listReservations() {
+  return apiRequest<CustomerReservation[]>("/api/v1/me/reservations");
+}
 
 export function createReservation(eventId: string, quantity: number) {
   return apiRequest<Reservation>(`/api/v1/events/${eventId}/reservations`, {

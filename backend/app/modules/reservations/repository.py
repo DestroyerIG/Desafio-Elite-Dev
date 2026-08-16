@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.enums import EventStatus
 from app.models.event import Event
@@ -43,6 +44,19 @@ async def get_customer_reservation(
     if for_update:
         query = query.with_for_update().execution_options(populate_existing=True)
     return await session.scalar(query)
+
+
+async def list_customer_reservations(
+    session: AsyncSession,
+    customer_id: UUID,
+) -> list[Reservation]:
+    result = await session.scalars(
+        select(Reservation)
+        .where(Reservation.customer_id == customer_id)
+        .options(selectinload(Reservation.event))
+        .order_by(Reservation.created_at.desc(), Reservation.id)
+    )
+    return list(result)
 
 
 async def add_reservation(

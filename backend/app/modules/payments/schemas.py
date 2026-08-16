@@ -29,5 +29,6 @@ class PaymentResponse(BaseModel):
     provider: str
     failure_reason: str | None
     tickets_created: int
+    ticket_ids: list[UUID]
     created_at: datetime
     updated_at: datetime

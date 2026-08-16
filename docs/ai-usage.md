@@ -21,5 +21,8 @@ Até a Fase 4, a IA foi usada para:
 - estruturar tokens de ingresso assinados, persistência por hash e geração autenticada de QR;
 - criar a área de ingressos no frontend com carregamento seguro da imagem protegida;
 - ampliar testes para recusa, quantidade exata, idempotência, propriedade e adulteração de token.
+- evoluir a cardinalidade de pagamentos com migration para preservar múltiplas tentativas por reserva;
+- implementar recuperação de reservas pendentes e nova tentativa de pagamento sem duplicar cobrança ou ingresso;
+- validar tentativas concorrentes de pagamento e a visibilidade privada do histórico de reservas.
 
 As sugestões precisam ser revisadas como qualquer contribuição de código. Decisões de produto, credenciais reais e aprovação para avançar entre fases continuam sob controle do responsável pelo projeto.

@@ -12,8 +12,16 @@ from app.modules.reservations.repository import (
     get_customer_reservation,
     get_event_for_update,
     get_published_event_for_update,
+    list_customer_reservations,
 )
 from app.modules.reservations.schemas import ReservationCreate
+
+
+async def list_reservations(
+    session: AsyncSession,
+    customer: User,
+) -> list[Reservation]:
+    return await list_customer_reservations(session, customer.id)
 
 
 async def create_reservation(

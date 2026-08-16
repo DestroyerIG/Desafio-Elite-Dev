@@ -14,7 +14,7 @@ O banco não é criado automaticamente na inicialização. O Alembic versiona mu
 
 ## Integridade também no banco
 
-Checks garantem capacidade positiva, estoque entre zero e capacidade, quantidade de reserva positiva e valores monetários não negativos. Uniques protegem e-mail, código público, hash de compartilhamento e a relação 1:1 entre pagamento e reserva. Validação na aplicação continuará necessária para mensagens de erro úteis.
+Checks garantem capacidade positiva, estoque entre zero e capacidade, quantidade de reserva positiva e valores monetários não negativos. Uniques protegem e-mail, código público e hash de compartilhamento. Pagamentos usam um índice não único por reserva para preservar o histórico de tentativas. Validação na aplicação continuará necessária para mensagens de erro úteis.
 
 ## Dinheiro com Decimal
 
@@ -76,9 +76,9 @@ O service depende do contrato `PaymentGateway`; a Fase 4 fornece apenas `FakePay
 
 ## Pagamento e emissão na mesma transação
 
-O pagamento bloqueia a reserva com `SELECT FOR UPDATE`. Aprovação, mudança para `PAID` e criação de N tickets são confirmadas juntas; qualquer erro reverte tudo. Isso impede uma reserva paga sem todos os ingressos ou ingressos sem pagamento aprovado. A relação única entre pagamento e reserva, combinada ao lock, torna repetições de uma aprovação idempotentes e evita emissão duplicada.
+O pagamento bloqueia a reserva com `SELECT FOR UPDATE`. Aprovação, mudança para `PAID` e criação de N tickets são confirmadas juntas; qualquer erro reverte tudo. Isso impede uma reserva paga sem todos os ingressos ou ingressos sem pagamento aprovado. Depois da aprovação, o status `PAID`, combinado ao lock, torna repetições idempotentes e evita novas cobranças ou emissão duplicada.
 
-O schema atual representa uma tentativa por reserva. Por isso, uma recusa é registrada e não é sobrescrita por outro cartão; o cliente pode cancelar e iniciar uma nova reserva. Suportar múltiplas tentativas exigiria mudar conscientemente a cardinalidade e o histórico em migration futura.
+O schema representa cada autorização como uma tentativa separada. Uma recusa é registrada, mantém a reserva `PENDING` e não cria ingressos; o cliente pode informar outro cartão e tentar novamente na mesma reserva. A migration `20260816_0002` removeu a unicidade de `payments.reservation_id` e criou um índice comum para suportar esse histórico sem armazenar números de cartão.
 
 ## QR assinado e hash persistido
 

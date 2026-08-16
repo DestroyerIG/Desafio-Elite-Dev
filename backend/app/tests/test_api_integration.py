@@ -4,10 +4,12 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from sqlalchemy import func, select
 
-from app.database.session import engine
+from app.database.session import async_session_factory, engine
 from app.integrations.ticketmaster.client import get_ticketmaster_client
 from app.main import app
+from app.models.payment import Payment
 from app.modules.catalog.schemas import CatalogEvent
 
 
@@ -371,17 +373,57 @@ async def test_payment_issues_exact_ticket_quantity_and_protects_qr() -> None:
             assert declined_payment.status_code == 402
             assert declined_payment.json()["error"]["code"] == "PAYMENT_DECLINED"
 
+            tickets_after_decline = await client.get(
+                "/api/v1/me/tickets",
+                headers=customer_headers,
+            )
+            assert not any(
+                ticket["reservation_id"] == declined_reservation_id
+                for ticket in tickets_after_decline.json()
+            )
+
+            own_reservations = await client.get(
+                "/api/v1/me/reservations",
+                headers=customer_headers,
+            )
+            other_customer_reservations = await client.get(
+                "/api/v1/me/reservations",
+                headers=other_customer_headers,
+            )
+            assert own_reservations.status_code == 200
+            assert any(
+                reservation["id"] == declined_reservation_id
+                and reservation["status"] == "PENDING"
+                and reservation["event"]["id"] == event_id
+                for reservation in own_reservations.json()
+            )
+            assert not any(
+                reservation["id"] == declined_reservation_id
+                for reservation in other_customer_reservations.json()
+            )
+
             declined_retry = await client.post(
                 f"/api/v1/reservations/{declined_reservation_id}/payments",
                 headers=customer_headers,
                 json={"card_number": "4242424242424242"},
             )
-            assert declined_retry.status_code == 402
+            assert declined_retry.status_code == 201
+            assert declined_retry.json()["status"] == "APPROVED"
+            assert declined_retry.json()["tickets_created"] == 1
+            assert len(declined_retry.json()["ticket_ids"]) == 1
             declined_detail = await client.get(
                 f"/api/v1/reservations/{declined_reservation_id}",
                 headers=customer_headers,
             )
-            assert declined_detail.json()["status"] == "PENDING"
+            assert declined_detail.json()["status"] == "PAID"
+
+            async with async_session_factory() as session:
+                attempt_count = await session.scalar(
+                    select(func.count(Payment.id)).where(
+                        Payment.reservation_id == declined_reservation_id
+                    )
+                )
+            assert attempt_count == 2
 
             approved_reservation = await client.post(
                 f"/api/v1/events/{event_id}/reservations",
@@ -399,6 +441,7 @@ async def test_payment_issues_exact_ticket_quantity_and_protects_qr() -> None:
             assert approved_payment.status_code == 201
             assert approved_payment.json()["status"] == "APPROVED"
             assert approved_payment.json()["tickets_created"] == 3
+            assert len(approved_payment.json()["ticket_ids"]) == 3
 
             approved_detail = await client.get(
                 f"/api/v1/reservations/{approved_reservation_id}",
@@ -416,13 +459,13 @@ async def test_payment_issues_exact_ticket_quantity_and_protects_qr() -> None:
                 for ticket in tickets_response.json()
                 if ticket["reservation_id"] == approved_reservation_id
             ]
-            declined_tickets = [
+            retried_tickets = [
                 ticket
                 for ticket in tickets_response.json()
                 if ticket["reservation_id"] == declined_reservation_id
             ]
             assert len(approved_tickets) == 3
-            assert declined_tickets == []
+            assert len(retried_tickets) == 1
             assert len({ticket["public_code"] for ticket in approved_tickets}) == 3
 
             ticket_id = approved_tickets[0]["id"]
@@ -455,6 +498,41 @@ async def test_payment_issues_exact_ticket_quantity_and_protects_qr() -> None:
             assert repeated_payment.status_code == 201
             assert repeated_payment.json()["id"] == approved_payment.json()["id"]
             assert repeated_payment.json()["tickets_created"] == 3
+            assert repeated_payment.json()["ticket_ids"] == approved_payment.json()[
+                "ticket_ids"
+            ]
+
+            concurrent_reservation = await client.post(
+                f"/api/v1/events/{event_id}/reservations",
+                headers=customer_headers,
+                json={"quantity": 1},
+            )
+            assert concurrent_reservation.status_code == 201
+            concurrent_reservation_id = concurrent_reservation.json()["id"]
+            concurrent_payments = await asyncio.gather(
+                client.post(
+                    f"/api/v1/reservations/{concurrent_reservation_id}/payments",
+                    headers=customer_headers,
+                    json={"card_number": "4242424242424242"},
+                ),
+                client.post(
+                    f"/api/v1/reservations/{concurrent_reservation_id}/payments",
+                    headers=customer_headers,
+                    json={"card_number": "5555555555554444"},
+                ),
+            )
+            assert all(response.status_code == 201 for response in concurrent_payments)
+            assert len({response.json()["id"] for response in concurrent_payments}) == 1
+            assert all(
+                len(response.json()["ticket_ids"]) == 1
+                for response in concurrent_payments
+            )
+            assert len(
+                {
+                    response.json()["ticket_ids"][0]
+                    for response in concurrent_payments
+                }
+            ) == 1
 
             tickets_after_retry = await client.get(
                 "/api/v1/me/tickets",
@@ -467,6 +545,13 @@ async def test_payment_issues_exact_ticket_quantity_and_protects_qr() -> None:
                     if ticket["reservation_id"] == approved_reservation_id
                 ]
             ) == 3
+            assert len(
+                [
+                    ticket
+                    for ticket in tickets_after_retry.json()
+                    if ticket["reservation_id"] == concurrent_reservation_id
+                ]
+            ) == 1
     finally:
         app.dependency_overrides.clear()
         await engine.dispose()

@@ -18,48 +18,73 @@ import { payReservation } from "@/services/payments";
 import {
   cancelReservation,
   createReservation,
+  getReservation,
 } from "@/services/reservations";
 import type { Reservation } from "@/types/api";
 import { cn } from "@/utils/cn";
 import { formatCurrency, formatDate } from "@/utils/format";
 
-export function Checkout({ eventId }: { eventId: string }) {
+export function Checkout({
+  eventId,
+  reservationId,
+}: {
+  eventId: string;
+  reservationId?: string;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, isLoading: authIsLoading } = useAuth();
   const [quantity, setQuantity] = useState("1");
   const [cardNumber, setCardNumber] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [createdReservation, setCreatedReservation] =
+    useState<Reservation | null>(null);
   const isCustomer = user?.role === "CUSTOMER";
+  const checkoutPath = reservationId
+    ? `/checkout/${eventId}?reservation=${reservationId}`
+    : `/checkout/${eventId}`;
 
   useEffect(() => {
     if (authIsLoading) return;
     if (!user) {
-      router.replace(`/login?next=/checkout/${eventId}`);
+      router.replace(`/login?next=${encodeURIComponent(checkoutPath)}`);
     } else if (!isCustomer) {
       router.replace(`/events/${eventId}`);
     }
-  }, [authIsLoading, eventId, isCustomer, router, user]);
+  }, [authIsLoading, checkoutPath, eventId, isCustomer, router, user]);
 
   const eventQuery = useQuery({
     queryKey: ["events", eventId],
     queryFn: () => getEvent(eventId),
     enabled: isCustomer,
   });
+  const reservationQuery = useQuery({
+    queryKey: ["reservations", reservationId],
+    queryFn: () => getReservation(reservationId as string),
+    enabled: isCustomer && Boolean(reservationId),
+  });
   const createMutation = useMutation({
     mutationFn: (selectedQuantity: number) =>
       createReservation(eventId, selectedQuantity),
     onSuccess: async (createdReservation) => {
-      setReservation(createdReservation);
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
+      setCreatedReservation(createdReservation);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["events"] }),
+        queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+      ]);
+      router.replace(
+        `/checkout/${eventId}?reservation=${createdReservation.id}`,
+      );
     },
   });
   const cancelMutation = useMutation({
     mutationFn: (reservationId: string) => cancelReservation(reservationId),
     onSuccess: async (cancelledReservation) => {
-      setReservation(cancelledReservation);
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
+      setCreatedReservation(cancelledReservation);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["events"] }),
+        queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+      ]);
     },
   });
   const paymentMutation = useMutation({
@@ -70,27 +95,34 @@ export function Checkout({ eventId }: { eventId: string }) {
       reservationId: string;
       normalizedCardNumber: string;
     }) => payReservation(reservationId, normalizedCardNumber),
-    onSuccess: async () => {
+    onSuccess: async (payment) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["events"] }),
+        queryClient.invalidateQueries({ queryKey: ["reservations"] }),
         queryClient.invalidateQueries({ queryKey: ["tickets"] }),
       ]);
-      router.push("/my-tickets");
+      const firstTicketId = payment.ticket_ids[0];
+      router.push(
+        firstTicketId ? `/my-tickets/${firstTicketId}` : "/my-tickets",
+      );
     },
   });
 
   if (authIsLoading || !isCustomer) {
     return <LoadingState label="Verificando acesso..." />;
   }
-  if (eventQuery.isLoading) return <LoadingState label="Carregando evento..." />;
-  if (eventQuery.error || !eventQuery.data) {
+  if (eventQuery.isLoading || reservationQuery.isLoading) {
+    return <LoadingState label="Carregando checkout..." />;
+  }
+  const pageError = reservationQuery.error ?? eventQuery.error;
+  if (pageError || !eventQuery.data) {
     return (
       <main className="mx-auto max-w-3xl px-5 py-12 sm:px-8">
         <ErrorMessage
           message={
-            eventQuery.error instanceof ApiError
-              ? eventQuery.error.message
-              : "Não foi possível carregar o evento."
+            pageError instanceof ApiError
+              ? pageError.message
+              : "Não foi possível carregar o checkout."
           }
         />
       </main>
@@ -98,6 +130,14 @@ export function Checkout({ eventId }: { eventId: string }) {
   }
 
   const event = eventQuery.data;
+  const reservation = createdReservation ?? reservationQuery.data ?? null;
+  if (reservation && reservation.event_id !== eventId) {
+    return (
+      <main className="mx-auto max-w-3xl px-5 py-12 sm:px-8">
+        <ErrorMessage message="Esta reserva não pertence ao evento informado." />
+      </main>
+    );
+  }
   const parsedQuantity = Number(quantity);
   const estimatedTotal = Number.isFinite(parsedQuantity)
     ? Number(event.ticket_price) * parsedQuantity
@@ -204,24 +244,31 @@ export function Checkout({ eventId }: { eventId: string }) {
                   autoComplete="cc-number"
                   placeholder="4242 4242 4242 4242"
                   value={cardNumber}
-                  onChange={(inputEvent) => setCardNumber(inputEvent.target.value)}
-                  disabled={paymentMutation.isPending || paymentWasDeclined}
+                  onChange={(inputEvent) => {
+                    setCardNumber(inputEvent.target.value);
+                    setFormError(null);
+                    if (paymentWasDeclined) paymentMutation.reset();
+                  }}
+                  disabled={paymentMutation.isPending}
                 />
               </div>
               {paymentWasDeclined && (
                 <p className="mt-3 text-sm leading-6 text-slate-700">
-                  Para tentar outro cartão, cancele esta reserva e inicie uma nova.
+                  Troque o número do cartão e tente novamente. Sua reserva continua
+                  ativa e o estoque permanece separado.
                 </p>
               )}
               {formError && <ErrorMessage message={formError} className="mt-4" />}
               <Button
                 type="submit"
                 className="mt-4 w-full sm:w-auto"
-                disabled={paymentMutation.isPending || paymentWasDeclined}
+                disabled={paymentMutation.isPending}
               >
                 {paymentMutation.isPending
                   ? "Processando..."
-                  : "Pagar e emitir ingressos"}
+                  : paymentWasDeclined
+                    ? "Tentar pagamento novamente"
+                    : "Pagar e emitir ingressos"}
               </Button>
             </form>
           )}

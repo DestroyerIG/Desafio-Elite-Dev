@@ -8,17 +8,37 @@ from app.database.session import get_db_session
 from app.models.enums import UserRole
 from app.models.user import User
 from app.modules.auth.dependencies import require_roles
-from app.modules.reservations.schemas import ReservationCreate, ReservationResponse
+from app.modules.reservations.schemas import (
+    CustomerReservationResponse,
+    ReservationCreate,
+    ReservationResponse,
+)
 from app.modules.reservations.service import (
     cancel_reservation,
     create_reservation,
     get_reservation,
+    list_reservations,
 )
 
 
 router = APIRouter(prefix="/api/v1", tags=["reservations"])
 DatabaseSession = Annotated[AsyncSession, Depends(get_db_session)]
 Customer = Annotated[User, Depends(require_roles(UserRole.CUSTOMER))]
+
+
+@router.get(
+    "/me/reservations",
+    response_model=list[CustomerReservationResponse],
+)
+async def customer_reservations(
+    session: DatabaseSession,
+    customer: Customer,
+) -> list[CustomerReservationResponse]:
+    reservations = await list_reservations(session, customer)
+    return [
+        CustomerReservationResponse.model_validate(reservation)
+        for reservation in reservations
+    ]
 
 
 @router.post(

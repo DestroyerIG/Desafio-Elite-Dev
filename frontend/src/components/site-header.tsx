@@ -29,12 +29,20 @@ export function SiteHeader() {
             </Link>
           )}
           {user?.role === "CUSTOMER" && (
-            <Link
-              href="/my-tickets"
-              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-            >
-              Meus ingressos
-            </Link>
+            <>
+              <Link
+                href="/my-reservations"
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+              >
+                Reservas
+              </Link>
+              <Link
+                href="/my-tickets"
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+              >
+                Ingressos
+              </Link>
+            </>
           )}
           {!isLoading && !user && (
             <Link href="/login" className={cn(buttonVariants({ size: "sm" }))}>

@@ -46,6 +46,7 @@ async def create_payment(
         provider=outcome.payment.provider,
         failure_reason=outcome.payment.failure_reason,
         tickets_created=outcome.tickets_created,
+        ticket_ids=outcome.ticket_ids,
         created_at=outcome.payment.created_at,
         updated_at=outcome.payment.updated_at,
     )

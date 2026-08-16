@@ -59,6 +59,19 @@ export interface Reservation {
   updated_at: string;
 }
 
+export interface ReservationEvent {
+  id: string;
+  title: string;
+  image_url: string | null;
+  venue_name: string;
+  venue_address: string;
+  event_date: string;
+}
+
+export interface CustomerReservation extends Reservation {
+  event: ReservationEvent;
+}
+
 export type PaymentStatus = "APPROVED" | "DECLINED";
 
 export interface Payment {
@@ -69,6 +82,7 @@ export interface Payment {
   provider: string;
   failure_reason: string | null;
   tickets_created: number;
+  ticket_ids: string[];
   created_at: string;
   updated_at: string;
 }
