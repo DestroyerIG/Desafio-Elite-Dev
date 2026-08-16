@@ -2,7 +2,14 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    field_validator,
+    model_validator,
+)
 
 from app.models.enums import EventStatus
 
@@ -15,6 +22,37 @@ class EventCreate(BaseModel):
     )
     capacity: int = Field(gt=0, le=1_000_000)
     ticket_price: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
+
+
+class PublicEventFilters(BaseModel):
+    q: str | None = Field(default=None, max_length=100)
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+    available_only: bool = False
+
+    @field_validator("q", mode="before")
+    @classmethod
+    def normalize_query(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "PublicEventFilters":
+        for field_name in ("date_from", "date_to"):
+            value = getattr(self, field_name)
+            if value is not None and (
+                value.tzinfo is None or value.utcoffset() is None
+            ):
+                raise ValueError(f"{field_name} must include a timezone")
+
+        if (
+            self.date_from is not None
+            and self.date_to is not None
+            and self.date_to < self.date_from
+        ):
+            raise ValueError("date_to must be greater than or equal to date_from")
+        return self
 
 
 class EventUpdate(BaseModel):

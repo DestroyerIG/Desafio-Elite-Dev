@@ -16,11 +16,19 @@ from app.modules.events.repository import (
     list_organizer_events,
     list_published_events,
 )
-from app.modules.events.schemas import EventCreate, EventUpdate
+from app.modules.events.schemas import EventCreate, EventUpdate, PublicEventFilters
 
 
-async def get_public_events(session: AsyncSession) -> list[Event]:
-    return await list_published_events(session)
+async def get_public_events(
+    session: AsyncSession, filters: PublicEventFilters
+) -> list[Event]:
+    return await list_published_events(
+        session,
+        query=filters.q,
+        date_from=filters.date_from,
+        date_to=filters.date_to,
+        available_only=filters.available_only,
+    )
 
 
 async def get_public_event(session: AsyncSession, event_id: UUID) -> Event:
@@ -128,4 +136,3 @@ async def delete_organizer_event(
             "Eventos com reservas não podem ser removidos.",
             409,
         ) from exc
-

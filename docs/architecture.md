@@ -33,7 +33,7 @@ O JWT identifica usuário e papel, mas a autorização não confia apenas no tok
 
 ## Frontend
 
-O App Router oferece página inicial, catálogo público, login, área do organizador, checkout protegido, "Minhas reservas", "Meus ingressos", ingresso público compartilhado e `/gate`. Uma reserva pendente pode ser retomada pelo identificador presente na URL. Após a aprovação, o checkout abre diretamente o primeiro ingresso e carrega seu QR autenticado. O compartilhamento apresenta o mesmo QR por um token público limitado. A portaria processa a câmera localmente com `jsQR`, mantém código manual como fallback e envia somente a credencial lida à API. TanStack Query controla cache e estados de requisição; Zod valida formulários.
+O App Router oferece página inicial, agenda pública, catálogo do organizador, login, área do organizador, checkout protegido, "Minhas reservas", "Meus ingressos", ingresso público compartilhado e `/gate`. Na agenda, texto, período e disponibilidade ficam serializados na URL; a API aplica os critérios diretamente no PostgreSQL e o TanStack Query separa o cache por combinação de filtros. Uma reserva pendente pode ser retomada pelo identificador presente na URL. Após a aprovação, o checkout abre diretamente o primeiro ingresso e carrega seu QR autenticado. O compartilhamento apresenta o mesmo QR por um token público limitado. A portaria processa a câmera localmente com `jsQR`, mantém código manual como fallback e envia somente a credencial lida à API. TanStack Query controla cache e estados de requisição; Zod valida formulários.
 
 ## Persistência
 

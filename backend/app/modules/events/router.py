@@ -1,7 +1,10 @@
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.session import get_db_session
@@ -12,7 +15,12 @@ from app.integrations.ticketmaster.client import (
 from app.models.enums import UserRole
 from app.models.user import User
 from app.modules.auth.dependencies import require_roles
-from app.modules.events.schemas import EventCreate, EventResponse, EventUpdate
+from app.modules.events.schemas import (
+    EventCreate,
+    EventResponse,
+    EventUpdate,
+    PublicEventFilters,
+)
 from app.modules.events.service import (
     delete_organizer_event,
     get_events_for_organizer,
@@ -30,9 +38,31 @@ Organizer = Annotated[User, Depends(require_roles(UserRole.ORGANIZER))]
 CatalogClient = Annotated[TicketmasterClient, Depends(get_ticketmaster_client)]
 
 
+def get_public_event_filters(
+    q: Annotated[str | None, Query(max_length=100)] = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    available_only: bool = False,
+) -> PublicEventFilters:
+    try:
+        return PublicEventFilters(
+            q=q,
+            date_from=date_from,
+            date_to=date_to,
+            available_only=available_only,
+        )
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+
+PublicFilters = Annotated[PublicEventFilters, Depends(get_public_event_filters)]
+
+
 @router.get("", response_model=list[EventResponse])
-async def list_events(session: DatabaseSession) -> list[EventResponse]:
-    events = await get_public_events(session)
+async def list_events(
+    session: DatabaseSession, filters: PublicFilters
+) -> list[EventResponse]:
+    events = await get_public_events(session, filters)
     return [EventResponse.model_validate(event) for event in events]
 
 
@@ -79,4 +109,3 @@ async def organizer_events(
 ) -> list[EventResponse]:
     events = await get_events_for_organizer(session, organizer)
     return [EventResponse.model_validate(event) for event in events]
-

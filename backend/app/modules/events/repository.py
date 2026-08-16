@@ -1,16 +1,46 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import EventStatus
 from app.models.event import Event
 
 
-async def list_published_events(session: AsyncSession) -> list[Event]:
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+async def list_published_events(
+    session: AsyncSession,
+    *,
+    query: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    available_only: bool = False,
+) -> list[Event]:
+    conditions = [Event.status == EventStatus.PUBLISHED]
+
+    if query:
+        pattern = f"%{_escape_like(query)}%"
+        conditions.append(
+            or_(
+                Event.title.ilike(pattern, escape="\\"),
+                Event.venue_name.ilike(pattern, escape="\\"),
+                Event.venue_address.ilike(pattern, escape="\\"),
+            )
+        )
+    if date_from is not None:
+        conditions.append(Event.event_date >= date_from)
+    if date_to is not None:
+        conditions.append(Event.event_date <= date_to)
+    if available_only:
+        conditions.append(Event.available_tickets > 0)
+
     result = await session.scalars(
         select(Event)
-        .where(Event.status == EventStatus.PUBLISHED)
+        .where(*conditions)
         .order_by(Event.event_date.asc())
     )
     return list(result.all())

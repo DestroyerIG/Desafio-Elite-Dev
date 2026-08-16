@@ -4,7 +4,7 @@
 
 Plataforma full-stack de eventos e ingressos do Desafio Elite Dev 2026. O MVP será desenvolvido em fases e cobrirá publicação de eventos, reserva com proteção contra overselling, pagamento simulado, emissão de ingressos individuais, QR assinado, compartilhamento e validação na portaria.
 
-Ao final da Fase 5, o repositório contém o fluxo principal completo: autenticação JWT com RBAC, catálogo externo da Ticketmaster, publicação local de eventos, reservas protegidas contra overselling, pagamento simulado, ingressos individuais com QR assinado, compartilhamento público somente leitura e validação transacional na portaria. O Next.js oferece experiências específicas para público, cliente, organizador e portaria.
+Ao final da Fase 5, o repositório contém o fluxo principal completo: autenticação JWT com RBAC, catálogo externo da Ticketmaster, publicação local de eventos, busca e filtros na agenda pública, reservas protegidas contra overselling, pagamento simulado, ingressos individuais com QR assinado, compartilhamento público somente leitura e validação transacional na portaria. O Next.js oferece experiências específicas para público, cliente, organizador e portaria.
 
 ## Arquitetura
 
@@ -77,7 +77,7 @@ POST   /api/v1/auth/register
 POST   /api/v1/auth/login
 GET    /api/v1/auth/me
 GET    /api/v1/catalog/events?q=
-GET    /api/v1/events
+GET    /api/v1/events?q=&date_from=&date_to=&available_only=
 GET    /api/v1/events/{id}
 POST   /api/v1/events
 PATCH  /api/v1/events/{id}
@@ -97,7 +97,7 @@ GET    /api/v1/shared-tickets/{token}/qr
 POST   /api/v1/gate/validate
 ```
 
-Cadastro público sempre cria um `CUSTOMER`. Pesquisa no catálogo e mutações de eventos exigem um JWT de `ORGANIZER`; a listagem e o detalhe de eventos publicados são públicos. Somente o `CUSTOMER` proprietário lista, acessa, cancela ou paga suas reservas e consulta ou compartilha seus ingressos. Apenas usuários `GATE` validam entradas.
+Cadastro público sempre cria um `CUSTOMER`. Pesquisa no catálogo e mutações de eventos exigem um JWT de `ORGANIZER`; a listagem e o detalhe de eventos publicados são públicos. Na listagem, `q` pesquisa título, nome e endereço do local sem diferenciar maiúsculas de minúsculas; `date_from` e `date_to` aceitam instantes ISO 8601 com fuso; `available_only=true` remove eventos esgotados. A página `/events` oferece esses filtros e mantém a seleção na URL. Somente o `CUSTOMER` proprietário lista, acessa, cancela ou paga suas reservas e consulta ou compartilha seus ingressos. Apenas usuários `GATE` validam entradas.
 
 O gateway de pagamento é simulado. O cartão de teste `4242 4242 4242 4242` é aprovado; números terminados em `0000` são recusados. O número é usado somente durante a chamada e não é persistido. Cada tentativa fica registrada. Depois de uma recusa, a reserva continua `PENDING` e pode ser retomada em "Minhas reservas" com outro cartão. O estoque permanece reservado até o pagamento ou cancelamento manual, e ingressos são emitidos somente após a aprovação. A resposta aprovada informa os IDs emitidos e o checkout abre diretamente o primeiro ingresso com seu QR; os demais permanecem em "Meus ingressos".
 
@@ -137,7 +137,7 @@ python -m pip install -r requirements-dev.txt
 pytest -q
 ```
 
-O teste ponta a ponta do backend é opt-in porque cria dados em um PostgreSQL isolado. Aponte `DATABASE_URL` para essa base, execute migration e seed, defina `RUN_INTEGRATION_TESTS=1` e rode `pytest -q` novamente. Nunca use uma base com dados importantes. A suíte comprova reserva concorrente sem overselling, pagamento recusado sem ingresso, nova tentativa aprovada na mesma reserva, pagamento concorrente sem duplicação, emissão exata, QR e propriedade protegidos, hash do compartilhamento, QR adulterado, evento errado e validação concorrente sem dupla entrada.
+O teste ponta a ponta do backend é opt-in porque cria dados em um PostgreSQL isolado. Aponte `DATABASE_URL` para essa base, execute migration e seed, defina `RUN_INTEGRATION_TESTS=1` e rode `pytest -q` novamente. Nunca use uma base com dados importantes. A suíte comprova busca e filtros públicos, reserva concorrente sem overselling, pagamento recusado sem ingresso, nova tentativa aprovada na mesma reserva, pagamento concorrente sem duplicação, emissão exata, QR e propriedade protegidos, hash do compartilhamento, QR adulterado, evento errado e validação concorrente sem dupla entrada.
 
 No frontend:
 

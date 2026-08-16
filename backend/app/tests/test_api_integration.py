@@ -142,6 +142,63 @@ async def test_auth_catalog_and_event_flow() -> None:
             assert update_response.json()["title"] == "Evento Atualizado"
             assert update_response.json()["available_tickets"] == 75
 
+            title_search = await client.get(
+                "/api/v1/events", params={"q": "  evento atualizado  "}
+            )
+            venue_search = await client.get(
+                "/api/v1/events", params={"q": "arena de teste"}
+            )
+            literal_wildcard_search = await client.get(
+                "/api/v1/events", params={"q": "%_"}
+            )
+            date_range = await client.get(
+                "/api/v1/events",
+                params={
+                    "date_from": "2027-05-20T00:00:00Z",
+                    "date_to": "2027-05-20T23:59:59Z",
+                },
+            )
+            outside_date_range = await client.get(
+                "/api/v1/events",
+                params={"date_from": "2027-05-21T00:00:00Z"},
+            )
+            available_events = await client.get(
+                "/api/v1/events", params={"available_only": "true"}
+            )
+            invalid_date_range = await client.get(
+                "/api/v1/events",
+                params={
+                    "date_from": "2027-05-21T00:00:00Z",
+                    "date_to": "2027-05-20T00:00:00Z",
+                },
+            )
+
+            assert title_search.status_code == 200
+            assert venue_search.status_code == 200
+            assert literal_wildcard_search.status_code == 200
+            assert date_range.status_code == 200
+            assert outside_date_range.status_code == 200
+            assert available_events.status_code == 200
+            assert invalid_date_range.status_code == 422
+            assert created_event["id"] in {
+                event["id"] for event in title_search.json()
+            }
+            assert created_event["id"] in {
+                event["id"] for event in venue_search.json()
+            }
+            assert created_event["id"] not in {
+                event["id"] for event in literal_wildcard_search.json()
+            }
+            assert created_event["id"] in {
+                event["id"] for event in date_range.json()
+            }
+            assert created_event["id"] not in {
+                event["id"] for event in outside_date_range.json()
+            }
+            assert created_event["id"] in {
+                event["id"] for event in available_events.json()
+            }
+
             delete_response = await client.delete(
                 f"/api/v1/events/{created_event['id']}",
                 headers={"Authorization": f"Bearer {organizer_token}"},
@@ -253,6 +310,11 @@ async def test_concurrent_reservations_do_not_oversell() -> None:
             )
             assert event_after_reservation.json()["available_tickets"] == 0
 
+            available_events = await client.get(
+                "/api/v1/events", params={"available_only": "true"}
+            )
+            assert event_id not in {event["id"] for event in available_events.json()}
+
             own_reservation = await client.get(
                 f"/api/v1/reservations/{reservation['id']}",
                 headers=customer_headers[winner_index],
@@ -284,6 +346,13 @@ async def test_concurrent_reservations_do_not_oversell() -> None:
                 f"/api/v1/events/{event_id}"
             )
             assert event_after_cancellation.json()["available_tickets"] == 1
+
+            available_events_after_cancellation = await client.get(
+                "/api/v1/events", params={"available_only": "true"}
+            )
+            assert event_id in {
+                event["id"] for event in available_events_after_cancellation.json()
+            }
 
             excessive_quantity = await client.post(
                 f"/api/v1/events/{event_id}/reservations",
