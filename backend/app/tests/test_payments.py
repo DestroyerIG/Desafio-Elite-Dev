@@ -1,8 +1,9 @@
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 
-from app.models.enums import PaymentStatus
+from app.models.enums import PaymentStatus, RefundStatus
 from app.modules.payments.gateway import FakePaymentGateway
 from app.modules.payments.schemas import PaymentCreate
 
@@ -27,6 +28,17 @@ async def test_fake_gateway_declines_card_ending_in_0000() -> None:
 
     assert result.status == PaymentStatus.DECLINED
     assert result.failure_reason is not None
+
+
+@pytest.mark.asyncio
+async def test_fake_gateway_approves_full_refund() -> None:
+    result = await FakePaymentGateway().refund(
+        payment_id=uuid4(),
+        amount=Decimal("50.00"),
+    )
+
+    assert result.status == RefundStatus.APPROVED
+    assert result.failure_reason is None
 
 
 def test_payment_input_normalizes_card_without_persisting_extra_data() -> None:

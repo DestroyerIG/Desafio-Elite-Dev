@@ -10,11 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError
 from app.core.security import create_ticket_token, hash_opaque_token, hash_ticket_token
+from app.models.enums import TicketStatus
 from app.models.ticket import Ticket, TicketShare
 from app.models.user import User
 from app.modules.tickets.repository import (
     add_ticket_share,
     get_customer_ticket,
+    get_customer_ticket_for_update,
     get_ticket_share_by_hash,
     list_customer_tickets,
 )
@@ -49,7 +51,19 @@ async def share_ticket(
     customer: User,
     ticket_id: UUID,
 ) -> tuple[TicketShare, str]:
-    ticket = await get_ticket(session, customer, ticket_id)
+    ticket = await get_customer_ticket_for_update(
+        session,
+        ticket_id,
+        customer.id,
+    )
+    if ticket is None:
+        raise AppError("TICKET_NOT_FOUND", "Ingresso não encontrado.", 404)
+    if ticket.status != TicketStatus.ACTIVE:
+        raise AppError(
+            "TICKET_NOT_ACTIVE",
+            "Somente ingressos ativos podem ser compartilhados.",
+            409,
+        )
     token = token_urlsafe(32)
     ticket_share = TicketShare(
         ticket_id=ticket.id,
@@ -94,6 +108,12 @@ async def create_shared_ticket_qr(
 
 
 def _render_ticket_qr(ticket: Ticket) -> bytes:
+    if ticket.status != TicketStatus.ACTIVE:
+        raise AppError(
+            "TICKET_NOT_ACTIVE",
+            "O QR Code não está disponível para este ingresso.",
+            409,
+        )
     token = create_ticket_token(ticket.id, ticket.event_id)
     if not compare_digest(hash_ticket_token(token), ticket.qr_token_hash):
         raise AppError(

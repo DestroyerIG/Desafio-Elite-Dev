@@ -14,7 +14,7 @@ import { paymentSchema } from "@/schemas/payments";
 import { reservationSchema } from "@/schemas/reservations";
 import { ApiError } from "@/services/api";
 import { getEvent } from "@/services/events";
-import { payReservation } from "@/services/payments";
+import { payReservation, refundReservation } from "@/services/payments";
 import {
   cancelReservation,
   createReservation,
@@ -107,6 +107,17 @@ export function Checkout({
       );
     },
   });
+  const refundMutation = useMutation({
+    mutationFn: (reservationId: string) => refundReservation(reservationId),
+    onSuccess: async (refund) => {
+      setCreatedReservation(refund.reservation);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["events"] }),
+        queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+        queryClient.invalidateQueries({ queryKey: ["tickets"] }),
+      ]);
+    },
+  });
 
   if (authIsLoading || !isCustomer) {
     return <LoadingState label="Verificando acesso..." />;
@@ -143,7 +154,10 @@ export function Checkout({
     ? Number(event.ticket_price) * parsedQuantity
     : 0;
   const requestError =
-    createMutation.error ?? cancelMutation.error ?? paymentMutation.error;
+    createMutation.error ??
+    cancelMutation.error ??
+    paymentMutation.error ??
+    refundMutation.error;
 
   function handleSubmit(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
@@ -175,9 +189,19 @@ export function Checkout({
     });
   }
 
+  function handleRefund() {
+    if (!reservation) return;
+    const confirmed = window.confirm(
+      "Confirmar o cancelamento integral desta compra? Os ingressos serão invalidados e o valor será reembolsado pelo simulador.",
+    );
+    if (confirmed) refundMutation.mutate(reservation.id);
+  }
+
   if (reservation) {
     const wasCancelled = reservation.status === "CANCELLED";
     const wasPaid = reservation.status === "PAID";
+    const wasRefunded = reservation.status === "REFUNDED";
+    const isPending = reservation.status === "PENDING";
     const paymentWasDeclined =
       paymentMutation.error instanceof ApiError &&
       paymentMutation.error.code === "PAYMENT_DECLINED";
@@ -187,9 +211,11 @@ export function Checkout({
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
             {wasCancelled
               ? "Reserva cancelada"
-              : wasPaid
-                ? "Pagamento aprovado"
-                : "Reserva confirmada"}
+              : wasRefunded
+                ? "Compra reembolsada"
+                : wasPaid
+                  ? "Pagamento aprovado"
+                  : "Reserva confirmada"}
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
             {event.title}
@@ -197,9 +223,11 @@ export function Checkout({
           <p className="mt-3 leading-7 text-slate-600">
             {wasCancelled
               ? "Os ingressos foram devolvidos à disponibilidade do evento."
-              : wasPaid
-                ? "Seus ingressos foram emitidos e já estão disponíveis."
-                : "O estoque foi separado. Conclua o pagamento simulado para emitir seus ingressos."}
+              : wasRefunded
+                ? "O pagamento foi reembolsado, os ingressos foram invalidados e o estoque foi devolvido ao evento."
+                : wasPaid
+                  ? "Seus ingressos foram emitidos e já estão disponíveis."
+                  : "O estoque foi separado. Conclua o pagamento simulado para emitir seus ingressos."}
           </p>
 
           <dl className="mt-8 grid gap-5 border-y border-slate-100 py-6 text-sm sm:grid-cols-2">
@@ -225,7 +253,7 @@ export function Checkout({
             </div>
           </dl>
 
-          {!wasCancelled && !wasPaid && (
+          {isPending && (
             <form
               onSubmit={handlePayment}
               className="mt-6 rounded-lg border border-blue-100 bg-blue-50/50 p-5"
@@ -291,11 +319,23 @@ export function Checkout({
               Voltar ao evento
             </Link>
             {wasPaid && (
-              <Link href="/my-tickets" className={cn(buttonVariants())}>
-                Ver meus ingressos
-              </Link>
+              <>
+                <Link href="/my-tickets" className={cn(buttonVariants())}>
+                  Ver meus ingressos
+                </Link>
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={refundMutation.isPending}
+                  onClick={handleRefund}
+                >
+                  {refundMutation.isPending
+                    ? "Reembolsando..."
+                    : "Solicitar reembolso"}
+                </Button>
+              </>
             )}
-            {!wasCancelled && !wasPaid && (
+            {isPending && (
               <Button
                 type="button"
                 variant="danger"

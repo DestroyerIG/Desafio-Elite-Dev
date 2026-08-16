@@ -10,6 +10,7 @@ from app.models.enums import PaymentStatus, enum_values
 from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.refund import Refund
     from app.models.reservation import Reservation
 
 
@@ -29,3 +30,6 @@ class Payment(TimestampMixin, Base):
     failure_reason: Mapped[str | None] = mapped_column(Text)
 
     reservation: Mapped["Reservation"] = relationship(back_populates="payments")
+    refund: Mapped["Refund | None"] = relationship(
+        back_populates="payment", uselist=False
+    )

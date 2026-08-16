@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import httpx
@@ -10,8 +11,10 @@ from app.core.security import create_ticket_token, hash_opaque_token
 from app.database.session import async_session_factory, engine
 from app.integrations.ticketmaster.client import get_ticketmaster_client
 from app.main import app
-from app.models.enums import TicketStatus, ValidationResult
+from app.models.enums import EventStatus, PaymentStatus, TicketStatus, ValidationResult
+from app.models.event import Event
 from app.models.payment import Payment
+from app.models.refund import Refund
 from app.models.ticket import Ticket, TicketShare, TicketValidation
 from app.modules.catalog.schemas import CatalogEvent
 
@@ -624,6 +627,152 @@ async def test_payment_issues_exact_ticket_quantity_and_protects_qr() -> None:
                     if ticket["reservation_id"] == concurrent_reservation_id
                 ]
             ) == 1
+
+            concurrent_ticket_id = concurrent_payments[0].json()["ticket_ids"][0]
+            concurrent_share = await client.post(
+                f"/api/v1/tickets/{concurrent_ticket_id}/share",
+                headers=customer_headers,
+            )
+            assert concurrent_share.status_code == 201
+            concurrent_share_token = concurrent_share.json()["token"]
+
+            hidden_refund = await client.post(
+                f"/api/v1/reservations/{concurrent_reservation_id}/refunds",
+                headers=other_customer_headers,
+            )
+            assert hidden_refund.status_code == 404
+
+            concurrent_actions = await asyncio.gather(
+                client.post(
+                    f"/api/v1/reservations/{concurrent_reservation_id}/refunds",
+                    headers=customer_headers,
+                ),
+                client.post(
+                    f"/api/v1/reservations/{concurrent_reservation_id}/refunds",
+                    headers=customer_headers,
+                ),
+                client.post(
+                    f"/api/v1/tickets/{concurrent_ticket_id}/share",
+                    headers=customer_headers,
+                ),
+            )
+            concurrent_refunds = concurrent_actions[:2]
+            share_during_refund = concurrent_actions[2]
+            assert all(response.status_code == 201 for response in concurrent_refunds)
+            assert len({response.json()["id"] for response in concurrent_refunds}) == 1
+            assert all(
+                response.json()["status"] == "APPROVED"
+                and response.json()["reservation"]["status"] == "REFUNDED"
+                and response.json()["tickets_refunded"] == 1
+                for response in concurrent_refunds
+            )
+            assert share_during_refund.status_code in {201, 409}
+            if share_during_refund.status_code == 201:
+                raced_share = await client.get(
+                    f"/api/v1/shared-tickets/{share_during_refund.json()['token']}"
+                )
+                assert raced_share.status_code == 404
+            else:
+                assert (
+                    share_during_refund.json()["error"]["code"]
+                    == "TICKET_NOT_ACTIVE"
+                )
+
+            refunded_event = await client.get(f"/api/v1/events/{event_id}")
+            refunded_tickets = await client.get(
+                "/api/v1/me/tickets", headers=customer_headers
+            )
+            refunded_qr = await client.get(
+                f"/api/v1/tickets/{concurrent_ticket_id}/qr",
+                headers=customer_headers,
+            )
+            refunded_share_attempt = await client.post(
+                f"/api/v1/tickets/{concurrent_ticket_id}/share",
+                headers=customer_headers,
+            )
+            revoked_share = await client.get(
+                f"/api/v1/shared-tickets/{concurrent_share_token}"
+            )
+            assert refunded_event.json()["available_tickets"] == 1
+            assert next(
+                ticket
+                for ticket in refunded_tickets.json()
+                if ticket["id"] == concurrent_ticket_id
+            )["status"] == "REFUNDED"
+            assert refunded_qr.status_code == 409
+            assert refunded_qr.json()["error"]["code"] == "TICKET_NOT_ACTIVE"
+            assert refunded_share_attempt.status_code == 409
+            assert (
+                refunded_share_attempt.json()["error"]["code"]
+                == "TICKET_NOT_ACTIVE"
+            )
+            assert revoked_share.status_code == 404
+
+            async with async_session_factory() as session:
+                refund_count = await session.scalar(
+                    select(func.count(Refund.id)).where(
+                        Refund.reservation_id == UUID(concurrent_reservation_id)
+                    )
+                )
+                old_payment = await session.scalar(
+                    select(Payment).where(
+                        Payment.reservation_id == UUID(approved_reservation_id),
+                        Payment.status == PaymentStatus.APPROVED,
+                    )
+                )
+                assert old_payment is not None
+                old_payment.created_at = datetime.now(UTC) - timedelta(days=8)
+                await session.commit()
+            assert refund_count == 1
+
+            expired_refund = await client.post(
+                f"/api/v1/reservations/{approved_reservation_id}/refunds",
+                headers=customer_headers,
+            )
+            assert expired_refund.status_code == 409
+            assert expired_refund.json()["error"]["code"] == "REFUND_WINDOW_EXPIRED"
+
+            async with async_session_factory() as session:
+                event = await session.get(Event, UUID(event_id))
+                assert event is not None
+                event.event_date = datetime.now(UTC) + timedelta(hours=24)
+                await session.commit()
+
+            late_refund = await client.post(
+                f"/api/v1/reservations/{declined_reservation_id}/refunds",
+                headers=customer_headers,
+            )
+            assert late_refund.status_code == 409
+            assert late_refund.json()["error"]["code"] == "REFUND_EVENT_TOO_CLOSE"
+
+            async with async_session_factory() as session:
+                event = await session.get(Event, UUID(event_id))
+                cancelled_event_payment = await session.scalar(
+                    select(Payment).where(
+                        Payment.reservation_id == UUID(declined_reservation_id),
+                        Payment.status == PaymentStatus.APPROVED,
+                    )
+                )
+                assert event is not None
+                assert cancelled_event_payment is not None
+                event.status = EventStatus.CANCELLED
+                cancelled_event_payment.created_at = datetime.now(UTC) - timedelta(
+                    days=8
+                )
+                await session.commit()
+
+            cancelled_event_refund = await client.post(
+                f"/api/v1/reservations/{declined_reservation_id}/refunds",
+                headers=customer_headers,
+            )
+            assert cancelled_event_refund.status_code == 201
+            assert cancelled_event_refund.json()["status"] == "APPROVED"
+            assert cancelled_event_refund.json()["reservation"]["status"] == "REFUNDED"
+
+            async with async_session_factory() as session:
+                cancelled_event = await session.get(Event, UUID(event_id))
+                assert cancelled_event is not None
+                assert cancelled_event.available_tickets == 2
     finally:
         app.dependency_overrides.clear()
         await engine.dispose()
@@ -858,6 +1007,16 @@ async def test_sharing_and_gate_validation_are_secure_and_atomic() -> None:
                 f"/api/v1/shared-tickets/{share_token}"
             )
             assert shared_after_use.json()["status"] == "USED"
+
+            used_ticket_refund = await client.post(
+                f"/api/v1/reservations/{reservation.json()['id']}/refunds",
+                headers=customer_headers,
+            )
+            assert used_ticket_refund.status_code == 409
+            assert (
+                used_ticket_refund.json()["error"]["code"]
+                == "REFUND_TICKET_USED"
+            )
 
             async with async_session_factory() as session:
                 ticket = await session.get(Ticket, UUID(ticket_id))

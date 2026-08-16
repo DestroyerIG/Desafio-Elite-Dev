@@ -11,8 +11,16 @@ import { ErrorMessage, LoadingState } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/services/api";
 import { getTicket, getTicketQr, shareTicket } from "@/services/tickets";
+import type { TicketStatus } from "@/types/api";
 import { cn } from "@/utils/cn";
 import { formatDate } from "@/utils/format";
+
+const statusLabels: Record<TicketStatus, string> = {
+  ACTIVE: "Ativo",
+  USED: "Utilizado",
+  REFUNDED: "Reembolsado",
+  CANCELLED: "Cancelado",
+};
 
 export function TicketDetails({ ticketId }: { ticketId: string }) {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -21,13 +29,18 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
     queryKey: ["tickets", ticketId],
     queryFn: () => getTicket(ticketId),
   });
+  const ticketIsActive = ticketQuery.data?.status === "ACTIVE";
   const qrQuery = useQuery({
     queryKey: ["tickets", ticketId, "qr"],
     queryFn: () => getTicketQr(ticketId),
+    enabled: ticketIsActive,
   });
   const qrUrl = useMemo(
-    () => (qrQuery.data ? URL.createObjectURL(qrQuery.data) : null),
-    [qrQuery.data],
+    () =>
+      ticketIsActive && qrQuery.data
+        ? URL.createObjectURL(qrQuery.data)
+        : null,
+    [qrQuery.data, ticketIsActive],
   );
   const shareMutation = useMutation({
     mutationFn: () => shareTicket(ticketId),
@@ -100,62 +113,69 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
               <div>
                 <dt className="font-medium text-slate-500">Status</dt>
                 <dd className="mt-1 font-semibold text-slate-950">
-                  {ticket.status}
+                  {statusLabels[ticket.status]}
                 </dd>
               </div>
             </dl>
-            <section className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-5">
-              <h2 className="font-semibold text-slate-950">
-                Compartilhar ingresso
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">
-                O link permite visualizar somente este ingresso e seu QR Code.
-                Quem receber o endereço poderá apresentá-lo na portaria.
-              </p>
-              {!shareUrl && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="mt-4"
-                  disabled={shareMutation.isPending}
-                  onClick={() => shareMutation.mutate()}
-                >
-                  {shareMutation.isPending
-                    ? "Gerando link..."
-                    : "Gerar link compartilhável"}
-                </Button>
-              )}
-              {shareMutation.error && (
-                <ErrorMessage
-                  className="mt-4"
-                  message={
-                    shareMutation.error instanceof ApiError
-                      ? shareMutation.error.message
-                      : "Não foi possível compartilhar este ingresso."
-                  }
-                />
-              )}
-              {shareUrl && (
-                <div className="mt-4">
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      aria-label="Link público do ingresso"
-                      readOnly
-                      value={shareUrl}
-                      onFocus={(event) => event.currentTarget.select()}
-                    />
-                    <Button type="button" onClick={copyShareUrl}>
-                      Copiar link
-                    </Button>
+            {ticket.status === "ACTIVE" ? (
+              <section className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-5">
+                <h2 className="font-semibold text-slate-950">
+                  Compartilhar ingresso
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  O link permite visualizar somente este ingresso e seu QR Code.
+                  Quem receber o endereço poderá apresentá-lo na portaria.
+                </p>
+                {!shareUrl && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="mt-4"
+                    disabled={shareMutation.isPending}
+                    onClick={() => shareMutation.mutate()}
+                  >
+                    {shareMutation.isPending
+                      ? "Gerando link..."
+                      : "Gerar link compartilhável"}
+                  </Button>
+                )}
+                {shareMutation.error && (
+                  <ErrorMessage
+                    className="mt-4"
+                    message={
+                      shareMutation.error instanceof ApiError
+                        ? shareMutation.error.message
+                        : "Não foi possível compartilhar este ingresso."
+                    }
+                  />
+                )}
+                {shareUrl && (
+                  <div className="mt-4">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        aria-label="Link público do ingresso"
+                        readOnly
+                        value={shareUrl}
+                        onFocus={(event) => event.currentTarget.select()}
+                      />
+                      <Button type="button" onClick={copyShareUrl}>
+                        Copiar link
+                      </Button>
+                    </div>
+                    {copyFeedback && (
+                      <p className="mt-2 text-sm text-slate-600" role="status">
+                        {copyFeedback}
+                      </p>
+                    )}
                   </div>
-                  {copyFeedback && (
-                    <p className="mt-2 text-sm text-slate-600" role="status">
-                      {copyFeedback}
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
+                )}
+              </section>
+            ) : (
+              <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
+                Este ingresso não está ativo. Seu QR Code e compartilhamento
+                permanecem indisponíveis.
+              </div>
+            )}
             <Link
               href="/my-tickets"
               className={cn(buttonVariants({ variant: "outline" }), "mt-6")}
@@ -170,8 +190,10 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Apresente este código na entrada do evento.
           </p>
-          {qrQuery.isLoading && <LoadingState label="Gerando QR..." />}
-          {qrQuery.error && (
+          {ticketIsActive && qrQuery.isLoading && (
+            <LoadingState label="Gerando QR..." />
+          )}
+          {ticketIsActive && qrQuery.error && (
             <ErrorMessage
               className="mt-5"
               message={
@@ -181,7 +203,7 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
               }
             />
           )}
-          {qrUrl && (
+          {ticketIsActive && qrUrl && (
             <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <Image
                 src={qrUrl}
@@ -192,6 +214,12 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
                 className="h-auto w-64"
               />
             </div>
+          )}
+          {!ticketIsActive && (
+            <p className="mt-5 text-sm leading-6 text-slate-600">
+              QR Code indisponível para ingresso{" "}
+              {statusLabels[ticket.status].toLowerCase()}.
+            </p>
           )}
           <p className="mt-5 font-mono text-xs text-slate-500">
             {ticket.public_code}

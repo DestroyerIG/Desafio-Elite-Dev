@@ -4,7 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import PaymentStatus
+from app.models.enums import PaymentStatus, RefundStatus
+from app.modules.reservations.schemas import ReservationResponse
 
 
 class PaymentCreate(BaseModel):
@@ -30,5 +31,20 @@ class PaymentResponse(BaseModel):
     failure_reason: str | None
     tickets_created: int
     ticket_ids: list[UUID]
+    created_at: datetime
+    updated_at: datetime
+
+
+class RefundResponse(BaseModel):
+    id: UUID
+    reservation_id: UUID
+    payment_id: UUID
+    amount: Decimal
+    status: RefundStatus
+    provider: str
+    failure_reason: str | None
+    processed_at: datetime | None
+    tickets_refunded: int
+    reservation: ReservationResponse
     created_at: datetime
     updated_at: datetime

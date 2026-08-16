@@ -80,6 +80,14 @@ O pagamento bloqueia a reserva com `SELECT FOR UPDATE`. Aprovação, mudança pa
 
 O schema representa cada autorização como uma tentativa separada. Uma recusa é registrada, mantém a reserva `PENDING` e não cria ingressos; o cliente pode informar outro cartão e tentar novamente na mesma reserva. A migration `20260816_0002` removeu a unicidade de `payments.reservation_id` e criou um índice comum para suportar esse histórico sem armazenar números de cartão.
 
+## Reembolso integral e idempotente
+
+Uma reserva `PAID` pode ser reembolsada pelo proprietário até 7 dias depois do pagamento e com pelo menos 48 horas antes do evento. Eventos cancelados dispensam os dois prazos. O pedido é sempre integral: todos os tickets precisam estar `ACTIVE`, e um único ingresso `USED` bloqueia a operação inteira.
+
+O service bloqueia evento, reserva e tickets antes de chamar o método de reembolso do gateway simulado. Quando aprovado, cria o registro financeiro, altera reserva e tickets para `REFUNDED`, revoga todos os links compartilhados e devolve a quantidade ao estoque na mesma transação. `refunds.reservation_id` e `refunds.payment_id` são únicos; combinados ao estado da reserva e aos locks, tornam chamadas simultâneas idempotentes. O pagamento aprovado original não é alterado e continua disponível para auditoria.
+
+O simulador conclui o reembolso imediatamente. Os estados `PENDING` e `FAILED` foram incluídos no contrato do reembolso para permitir a evolução para um gateway assíncrono, mas produção exigiria idempotency key no provedor, webhook assinado e reconciliação antes de liberar o estoque.
+
 ## QR assinado e hash persistido
 
 O conteúdo do QR é um JWT HS256 contendo somente `ticket_id`, `event_id` e `type=ticket`, assinado por `TICKET_SECRET`, separado do segredo de autenticação. O banco guarda apenas SHA-256 do token. Ao solicitar o PNG autenticado, o backend recria o token determinístico e compara seu hash em tempo constante antes de gerar a imagem.

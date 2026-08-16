@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReservationCard } from "@/components/reservations/reservation-card";
 import { EmptyState, ErrorMessage, LoadingState } from "@/components/ui/feedback";
 import { ApiError } from "@/services/api";
+import { refundReservation } from "@/services/payments";
 import { cancelReservation, listReservations } from "@/services/reservations";
 
 export function ReservationList() {
@@ -22,6 +23,24 @@ export function ReservationList() {
       ]);
     },
   });
+  const refundMutation = useMutation({
+    mutationFn: refundReservation,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+        queryClient.invalidateQueries({ queryKey: ["events"] }),
+        queryClient.invalidateQueries({ queryKey: ["tickets"] }),
+      ]);
+    },
+  });
+  const requestError = cancelMutation.error ?? refundMutation.error;
+
+  function requestRefund(reservationId: string) {
+    const confirmed = window.confirm(
+      "Confirmar o cancelamento integral desta compra? Os ingressos serão invalidados e o valor será reembolsado pelo simulador.",
+    );
+    if (confirmed) refundMutation.mutate(reservationId);
+  }
 
   if (reservationsQuery.isLoading) {
     return <LoadingState label="Carregando reservas..." />;
@@ -48,12 +67,12 @@ export function ReservationList() {
 
   return (
     <div className="space-y-6">
-      {cancelMutation.error && (
+      {requestError && (
         <ErrorMessage
           message={
-            cancelMutation.error instanceof ApiError
-              ? cancelMutation.error.message
-              : "Não foi possível cancelar a reserva."
+            requestError instanceof ApiError
+              ? requestError.message
+              : "Não foi possível concluir o cancelamento ou reembolso."
           }
         />
       )}
@@ -64,7 +83,11 @@ export function ReservationList() {
           isCancelling={
             cancelMutation.isPending && cancelMutation.variables === reservation.id
           }
+          isRefunding={
+            refundMutation.isPending && refundMutation.variables === reservation.id
+          }
           onCancel={(reservationId) => cancelMutation.mutate(reservationId)}
+          onRefund={requestRefund}
         />
       ))}
     </div>

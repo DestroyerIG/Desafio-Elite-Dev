@@ -33,7 +33,7 @@ O JWT identifica usuário e papel, mas a autorização não confia apenas no tok
 
 ## Frontend
 
-O App Router oferece página inicial, agenda pública, catálogo do organizador, login, área do organizador, checkout protegido, "Minhas reservas", "Meus ingressos", ingresso público compartilhado e `/gate`. Na agenda, texto, período e disponibilidade ficam serializados na URL; a API aplica os critérios diretamente no PostgreSQL e o TanStack Query separa o cache por combinação de filtros. Uma reserva pendente pode ser retomada pelo identificador presente na URL. Após a aprovação, o checkout abre diretamente o primeiro ingresso e carrega seu QR autenticado. O compartilhamento apresenta o mesmo QR por um token público limitado. A portaria processa a câmera localmente com `jsQR`, mantém código manual como fallback e envia somente a credencial lida à API. TanStack Query controla cache e estados de requisição; Zod valida formulários.
+O App Router oferece página inicial, agenda pública, catálogo do organizador, login, área do organizador, checkout protegido, "Minhas reservas", "Meus ingressos", ingresso público compartilhado e `/gate`. Na agenda, texto, período e disponibilidade ficam serializados na URL; a API aplica os critérios diretamente no PostgreSQL e o TanStack Query separa o cache por combinação de filtros. Uma reserva pendente pode ser retomada pelo identificador presente na URL. Após a aprovação, o checkout abre diretamente o primeiro ingresso e carrega seu QR autenticado. Reservas pagas elegíveis podem ser reembolsadas no checkout ou em "Minhas reservas"; as consultas de eventos, reservas e ingressos são invalidadas juntas para refletir o novo estado. O compartilhamento apresenta o mesmo QR por um token público limitado. A portaria processa a câmera localmente com `jsQR`, mantém código manual como fallback e envia somente a credencial lida à API. TanStack Query controla cache e estados de requisição; Zod valida formulários.
 
 ## Persistência
 
@@ -43,6 +43,7 @@ O schema inicial contém:
 - `events`: cópia local de um evento externo e seu estoque.
 - `reservations`: intenção de compra por quantidade e preço congelado.
 - `payments`: histórico das tentativas de pagamento associadas à reserva.
+- `refunds`: registro único do reembolso integral associado à reserva e ao pagamento aprovado.
 - `tickets`: uma unidade de ingresso por linha.
 - `ticket_shares`: compartilhamentos públicos por hash de token.
 - `ticket_validations`: trilha de auditoria da portaria.
@@ -50,5 +51,7 @@ O schema inicial contém:
 Constraints no PostgreSQL protegem unicidade, quantidades, preços e relações essenciais. A criação da reserva bloqueia a linha do evento com `SELECT FOR UPDATE`, valida o estoque, diminui a disponibilidade e insere a reserva na mesma transação. Cancelamento bloqueia evento e reserva nessa ordem antes de devolver estoque.
 
 Cada tentativa de pagamento bloqueia a reserva e persiste seu resultado. Uma recusa mantém a reserva pendente e não cria tickets. Quando aprovada, a mesma transação altera o status, persiste o pagamento e cria exatamente uma linha de ticket por unidade. Cada ticket recebe código público e hash de um JWT assinado com segredo independente. O token é recriado ao gerar o PNG do QR e nunca é persistido em texto puro.
+
+O reembolso bloqueia evento, reserva e ingressos nessa ordem. Depois de validar propriedade, prazo, antecedência e ausência de check-in, o simulador aprova a devolução. Registro financeiro, estados `REFUNDED`, revogação dos compartilhamentos e reposição do estoque são confirmados na mesma transação. A unicidade de `refunds.reservation_id`, combinada aos locks, impede reembolso ou devolução duplicados.
 
 O compartilhamento persiste apenas o hash SHA-256 de um token aleatório e oferece detalhe e QR públicos somente leitura. Na portaria, QR e código manual convergem para o mesmo serviço. O ticket é localizado com `SELECT FOR UPDATE`; a decisão, a mudança para `USED` e a linha de auditoria em `ticket_validations` são confirmadas na mesma transação.

@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from "@/utils/format";
 const statusLabels: Record<ReservationStatus, string> = {
   PENDING: "Aguardando pagamento",
   PAID: "Pago",
+  REFUNDED: "Reembolsado",
   CANCELLED: "Cancelado",
   EXPIRED: "Expirado",
 };
@@ -17,11 +18,15 @@ const statusLabels: Record<ReservationStatus, string> = {
 export function ReservationCard({
   reservation,
   isCancelling,
+  isRefunding,
   onCancel,
+  onRefund,
 }: {
   reservation: CustomerReservation;
   isCancelling: boolean;
+  isRefunding: boolean;
   onCancel: (reservationId: string) => void;
+  onRefund: (reservationId: string) => void;
 }) {
   const isPending = reservation.status === "PENDING";
   const isPaid = reservation.status === "PAID";
@@ -63,6 +68,13 @@ export function ReservationCard({
               </dd>
             </div>
           </dl>
+          {isPaid && (
+            <p className="mt-4 text-xs leading-5 text-slate-500">
+              Reembolso integral disponível em até 7 dias do pagamento e com
+              pelo menos 48 horas de antecedência do evento. Ingressos usados
+              não são elegíveis.
+            </p>
+          )}
           <div className="mt-5 flex flex-wrap gap-3">
             {isPending && (
               <>
@@ -83,9 +95,19 @@ export function ReservationCard({
               </>
             )}
             {isPaid && (
-              <Link href="/my-tickets" className={cn(buttonVariants())}>
-                Ver ingressos
-              </Link>
+              <>
+                <Link href="/my-tickets" className={cn(buttonVariants())}>
+                  Ver ingressos
+                </Link>
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={isRefunding}
+                  onClick={() => onRefund(reservation.id)}
+                >
+                  {isRefunding ? "Reembolsando..." : "Solicitar reembolso"}
+                </Button>
+              </>
             )}
             <Link
               href={`/events/${reservation.event_id}`}

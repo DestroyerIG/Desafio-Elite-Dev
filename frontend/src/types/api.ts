@@ -44,7 +44,12 @@ export interface CatalogEvent {
   event_date: string;
 }
 
-export type ReservationStatus = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED";
+export type ReservationStatus =
+  | "PENDING"
+  | "PAID"
+  | "REFUNDED"
+  | "CANCELLED"
+  | "EXPIRED";
 
 export interface Reservation {
   id: string;
@@ -87,7 +92,24 @@ export interface Payment {
   updated_at: string;
 }
 
-export type TicketStatus = "ACTIVE" | "USED" | "CANCELLED";
+export type RefundStatus = "PENDING" | "APPROVED" | "FAILED";
+
+export interface Refund {
+  id: string;
+  reservation_id: string;
+  payment_id: string;
+  amount: string;
+  status: RefundStatus;
+  provider: string;
+  failure_reason: string | null;
+  processed_at: string | null;
+  tickets_refunded: number;
+  reservation: Reservation;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TicketStatus = "ACTIVE" | "USED" | "REFUNDED" | "CANCELLED";
 
 export interface TicketEvent {
   id: string;

@@ -13,6 +13,7 @@ from app.models.mixins import TimestampMixin
 if TYPE_CHECKING:
     from app.models.event import Event
     from app.models.payment import Payment
+    from app.models.refund import Refund
     from app.models.ticket import Ticket
     from app.models.user import User
 
@@ -46,4 +47,7 @@ class Reservation(TimestampMixin, Base):
     customer: Mapped["User"] = relationship(back_populates="reservations")
     event: Mapped["Event"] = relationship(back_populates="reservations")
     payments: Mapped[list["Payment"]] = relationship(back_populates="reservation")
+    refund: Mapped["Refund | None"] = relationship(
+        back_populates="reservation", uselist=False
+    )
     tickets: Mapped[list["Ticket"]] = relationship(back_populates="reservation")

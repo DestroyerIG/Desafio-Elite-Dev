@@ -17,6 +17,7 @@ class EventStatus(str, Enum):
 class ReservationStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"
+    REFUNDED = "REFUNDED"
     CANCELLED = "CANCELLED"
     EXPIRED = "EXPIRED"
 
@@ -26,9 +27,16 @@ class PaymentStatus(str, Enum):
     DECLINED = "DECLINED"
 
 
+class RefundStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    FAILED = "FAILED"
+
+
 class TicketStatus(str, Enum):
     ACTIVE = "ACTIVE"
     USED = "USED"
+    REFUNDED = "REFUNDED"
     CANCELLED = "CANCELLED"
 
 
@@ -44,4 +52,3 @@ EnumType = TypeVar("EnumType", bound=Enum)
 
 def enum_values(enum_class: type[EnumType]) -> list[str]:
     return [str(item.value) for item in enum_class]
-

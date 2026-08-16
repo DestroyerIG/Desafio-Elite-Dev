@@ -18,6 +18,7 @@ import { formatDate } from "@/utils/format";
 const statusLabels: Record<TicketStatus, string> = {
   ACTIVE: "Ativo",
   USED: "Utilizado",
+  REFUNDED: "Reembolsado",
   CANCELLED: "Cancelado",
 };
 

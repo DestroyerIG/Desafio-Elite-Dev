@@ -32,6 +32,19 @@ async def get_customer_ticket(
     )
 
 
+async def get_customer_ticket_for_update(
+    session: AsyncSession,
+    ticket_id: UUID,
+    customer_id: UUID,
+) -> Ticket | None:
+    return await session.scalar(
+        select(Ticket)
+        .where(Ticket.id == ticket_id, Ticket.owner_id == customer_id)
+        .options(selectinload(Ticket.event))
+        .with_for_update()
+    )
+
+
 async def add_ticket_share(
     session: AsyncSession,
     ticket_share: TicketShare,

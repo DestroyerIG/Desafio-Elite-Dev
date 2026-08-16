@@ -8,7 +8,15 @@ import { formatDate } from "@/utils/format";
 const statusLabels: Record<TicketStatus, string> = {
   ACTIVE: "Ativo",
   USED: "Utilizado",
+  REFUNDED: "Reembolsado",
   CANCELLED: "Cancelado",
+};
+
+const statusStyles: Record<TicketStatus, string> = {
+  ACTIVE: "bg-emerald-50 text-emerald-800",
+  USED: "bg-amber-50 text-amber-800",
+  REFUNDED: "bg-slate-100 text-slate-700",
+  CANCELLED: "bg-slate-100 text-slate-700",
 };
 
 export function TicketCard({ ticket }: { ticket: Ticket }) {
@@ -24,7 +32,9 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
             {formatDate(ticket.event.event_date)}
           </p>
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[ticket.status]}`}
+          >
             {statusLabels[ticket.status]}
           </span>
         </div>
