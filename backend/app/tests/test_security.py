@@ -1,3 +1,4 @@
+import logging
 from uuid import uuid4
 
 import jwt
@@ -14,6 +15,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.core.logging import SensitivePathFilter
 from app.models.enums import UserRole
 
 
@@ -84,3 +86,25 @@ def test_tampered_ticket_token_is_rejected() -> None:
 
     with pytest.raises(jwt.PyJWTError):
         decode_ticket_token(tampered_token)
+
+
+def test_shared_ticket_token_is_redacted_from_access_log() -> None:
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=(
+            "127.0.0.1:50000",
+            "GET",
+            "/api/v1/shared-tickets/secret-token/qr",
+            "1.1",
+            200,
+        ),
+        exc_info=None,
+    )
+
+    SensitivePathFilter().filter(record)
+
+    assert record.args[2] == "/api/v1/shared-tickets/[REDACTED]/qr"

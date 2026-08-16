@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.ticket import Ticket
+from app.models.ticket import Ticket, TicketShare
 
 
 async def list_customer_tickets(
@@ -29,4 +29,25 @@ async def get_customer_ticket(
         select(Ticket)
         .where(Ticket.id == ticket_id, Ticket.owner_id == customer_id)
         .options(selectinload(Ticket.event))
+    )
+
+
+async def add_ticket_share(
+    session: AsyncSession,
+    ticket_share: TicketShare,
+) -> TicketShare:
+    session.add(ticket_share)
+    await session.flush()
+    await session.refresh(ticket_share)
+    return ticket_share
+
+
+async def get_ticket_share_by_hash(
+    session: AsyncSession,
+    token_hash: str,
+) -> TicketShare | None:
+    return await session.scalar(
+        select(TicketShare)
+        .where(TicketShare.token_hash == token_hash)
+        .options(selectinload(TicketShare.ticket).selectinload(Ticket.event))
     )

@@ -14,6 +14,7 @@ import type { User } from "@/types/api";
 
 function destinationFor(user: User) {
   if (user.role === "ORGANIZER") return "/organizer/dashboard";
+  if (user.role === "GATE") return "/gate";
   if (user.role === "CUSTOMER" && typeof window !== "undefined") {
     const requestedPath = new URLSearchParams(window.location.search).get("next");
     if (

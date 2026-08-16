@@ -71,4 +71,8 @@ def decode_ticket_token(token: str) -> dict[str, Any]:
 
 
 def hash_ticket_token(token: str) -> str:
+    return hash_opaque_token(token)
+
+
+def hash_opaque_token(token: str) -> str:
     return sha256(token.encode("utf-8")).hexdigest()

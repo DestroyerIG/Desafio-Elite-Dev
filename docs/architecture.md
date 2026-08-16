@@ -33,7 +33,7 @@ O JWT identifica usuário e papel, mas a autorização não confia apenas no tok
 
 ## Frontend
 
-O App Router já oferece página inicial, listagem e detalhe públicos, login, área do organizador, checkout protegido, "Minhas reservas" e "Meus ingressos". Uma reserva pendente pode ser retomada no checkout pelo identificador presente na URL. Após a aprovação, o checkout usa os IDs retornados pelo pagamento para abrir diretamente o primeiro ingresso e carregar seu QR autenticado. TanStack Query controla cache, carregamento, erros, QR em `Blob` e invalidação após mutações; Zod valida os formulários antes de chamar a API. A área de portaria será adicionada junto ao fluxo correspondente.
+O App Router oferece página inicial, catálogo público, login, área do organizador, checkout protegido, "Minhas reservas", "Meus ingressos", ingresso público compartilhado e `/gate`. Uma reserva pendente pode ser retomada pelo identificador presente na URL. Após a aprovação, o checkout abre diretamente o primeiro ingresso e carrega seu QR autenticado. O compartilhamento apresenta o mesmo QR por um token público limitado. A portaria processa a câmera localmente com `jsQR`, mantém código manual como fallback e envia somente a credencial lida à API. TanStack Query controla cache e estados de requisição; Zod valida formulários.
 
 ## Persistência
 
@@ -49,4 +49,6 @@ O schema inicial contém:
 
 Constraints no PostgreSQL protegem unicidade, quantidades, preços e relações essenciais. A criação da reserva bloqueia a linha do evento com `SELECT FOR UPDATE`, valida o estoque, diminui a disponibilidade e insere a reserva na mesma transação. Cancelamento bloqueia evento e reserva nessa ordem antes de devolver estoque.
 
-Cada tentativa de pagamento bloqueia a reserva e persiste seu resultado. Uma recusa mantém a reserva pendente e não cria tickets. Quando aprovada, a mesma transação altera o status, persiste o pagamento e cria exatamente uma linha de ticket por unidade. Cada ticket recebe código público e hash de um JWT assinado com segredo independente. O token é recriado somente para o proprietário ao gerar o PNG do QR e nunca é persistido em texto puro. Em uma fase seguinte, o mesmo princípio transacional protegerá o uso único do ingresso na portaria.
+Cada tentativa de pagamento bloqueia a reserva e persiste seu resultado. Uma recusa mantém a reserva pendente e não cria tickets. Quando aprovada, a mesma transação altera o status, persiste o pagamento e cria exatamente uma linha de ticket por unidade. Cada ticket recebe código público e hash de um JWT assinado com segredo independente. O token é recriado ao gerar o PNG do QR e nunca é persistido em texto puro.
+
+O compartilhamento persiste apenas o hash SHA-256 de um token aleatório e oferece detalhe e QR públicos somente leitura. Na portaria, QR e código manual convergem para o mesmo serviço. O ticket é localizado com `SELECT FOR UPDATE`; a decisão, a mudança para `USED` e a linha de auditoria em `ticket_validations` são confirmadas na mesma transação.

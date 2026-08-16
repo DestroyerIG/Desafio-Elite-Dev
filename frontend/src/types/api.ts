@@ -108,3 +108,30 @@ export interface Ticket {
   created_at: string;
   event: TicketEvent;
 }
+
+export interface TicketShare {
+  token: string;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface SharedTicket {
+  public_code: string;
+  status: TicketStatus;
+  used_at: string | null;
+  event: TicketEvent;
+}
+
+export type ValidationResult =
+  | "VALID"
+  | "INVALID"
+  | "ALREADY_USED"
+  | "WRONG_EVENT";
+
+export interface GateValidation {
+  result: ValidationResult;
+  message: string;
+  ticket_id: string | null;
+  public_code: string | null;
+  validated_at: string;
+}

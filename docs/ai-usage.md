@@ -24,5 +24,8 @@ Até a Fase 4, a IA foi usada para:
 - evoluir a cardinalidade de pagamentos com migration para preservar múltiplas tentativas por reserva;
 - implementar recuperação de reservas pendentes e nova tentativa de pagamento sem duplicar cobrança ou ingresso;
 - validar tentativas concorrentes de pagamento e a visibilidade privada do histórico de reservas.
+- implementar compartilhamento por token opaco com persistência apenas de hash;
+- revisar a ordem transacional e criar testes concorrentes para validação única na portaria;
+- construir leitura local de QR pela câmera, fallback manual e feedback dos quatro resultados obrigatórios.
 
 As sugestões precisam ser revisadas como qualquer contribuição de código. Decisões de produto, credenciais reais e aprovação para avançar entre fases continuam sob controle do responsável pelo projeto.

@@ -84,4 +84,14 @@ O schema representa cada autorização como uma tentativa separada. Uma recusa �
 
 O conteúdo do QR é um JWT HS256 contendo somente `ticket_id`, `event_id` e `type=ticket`, assinado por `TICKET_SECRET`, separado do segredo de autenticação. O banco guarda apenas SHA-256 do token. Ao solicitar o PNG autenticado, o backend recria o token determinístico e compara seu hash em tempo constante antes de gerar a imagem.
 
-UUID puro permitiria fabricar códigos visualmente plausíveis; a assinatura comprova origem e integridade. O estado do ticket continua no PostgreSQL, portanto a assinatura não substitui a verificação transacional que será implementada na portaria. Como trade-off, rotacionar o segredo atual invalida a regeneração dos QRs existentes sem uma estratégia de versionamento ou reemissão.
+UUID puro permitiria fabricar códigos visualmente plausíveis; a assinatura comprova origem e integridade. O estado do ticket continua no PostgreSQL, portanto a assinatura não substitui a verificação transacional feita na portaria. Como trade-off, rotacionar o segredo atual invalida a regeneração dos QRs existentes sem uma estratégia de versionamento ou reemissão.
+
+## Compartilhamento com token opaco
+
+Cada solicitação gera 32 bytes aleatórios representados em formato seguro para URL. O token bruto é devolvido uma única vez ao proprietário; `ticket_shares` guarda somente SHA-256. Assim, uma leitura do banco não revela links utilizáveis. O endpoint público expõe apenas evento, código, status e QR daquele ingresso, sem IDs internos de reserva nem mutações. Como o token faz parte da rota pública, um filtro substitui esse segmento por `[REDACTED]` no access log do Uvicorn. Expiração e revogação foram mantidas no schema, mas adiadas na interface para não ampliar o MVP.
+
+## Validação transacional na portaria
+
+QR e código manual convergem para o mesmo serviço. O QR precisa ter assinatura válida, payload coerente e hash igual ao emitido; o código manual localiza o `public_code`. Depois disso, `SELECT FOR UPDATE` bloqueia a linha do ticket antes de verificar evento e status. A primeira transação correta marca `USED`; uma segunda leitura concorrente espera e retorna `ALREADY_USED` ao observar o estado confirmado.
+
+Toda tentativa contra um evento existente gera `ticket_validations`, inclusive credencial inválida sem ticket localizado. O evento é verificado antes do estado de uso para retornar `WRONG_EVENT` sem consumir o ingresso. A câmera usa `jsQR` localmente: nenhum frame é enviado à API, e o formulário manual cobre ausência ou recusa de permissão da câmera.

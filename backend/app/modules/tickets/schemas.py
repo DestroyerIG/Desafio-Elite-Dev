@@ -28,3 +28,18 @@ class TicketResponse(BaseModel):
     used_at: datetime | None
     created_at: datetime
     event: TicketEventResponse
+
+
+class TicketShareResponse(BaseModel):
+    token: str
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class SharedTicketResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    public_code: str
+    status: TicketStatus
+    used_at: datetime | None
+    event: TicketEventResponse

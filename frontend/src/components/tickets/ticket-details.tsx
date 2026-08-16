@@ -2,18 +2,21 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { EventArtwork } from "@/components/events/event-artwork";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ErrorMessage, LoadingState } from "@/components/ui/feedback";
+import { Input } from "@/components/ui/input";
 import { ApiError } from "@/services/api";
-import { getTicket, getTicketQr } from "@/services/tickets";
+import { getTicket, getTicketQr, shareTicket } from "@/services/tickets";
 import { cn } from "@/utils/cn";
 import { formatDate } from "@/utils/format";
 
 export function TicketDetails({ ticketId }: { ticketId: string }) {
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const ticketQuery = useQuery({
     queryKey: ["tickets", ticketId],
     queryFn: () => getTicket(ticketId),
@@ -26,6 +29,13 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
     () => (qrQuery.data ? URL.createObjectURL(qrQuery.data) : null),
     [qrQuery.data],
   );
+  const shareMutation = useMutation({
+    mutationFn: () => shareTicket(ticketId),
+    onSuccess: (share) => {
+      setShareUrl(`${window.location.origin}/shared-tickets/${share.token}`);
+      setCopyFeedback(null);
+    },
+  });
 
   useEffect(
     () => () => {
@@ -50,6 +60,17 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
   }
 
   const ticket = ticketQuery.data;
+
+  async function copyShareUrl() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopyFeedback("Link copiado.");
+    } catch {
+      setCopyFeedback("Selecione o endereço e copie manualmente.");
+    }
+  }
+
   return (
     <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="grid lg:grid-cols-[1fr_22rem]">
@@ -83,6 +104,58 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
                 </dd>
               </div>
             </dl>
+            <section className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-5">
+              <h2 className="font-semibold text-slate-950">
+                Compartilhar ingresso
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                O link permite visualizar somente este ingresso e seu QR Code.
+                Quem receber o endereço poderá apresentá-lo na portaria.
+              </p>
+              {!shareUrl && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-4"
+                  disabled={shareMutation.isPending}
+                  onClick={() => shareMutation.mutate()}
+                >
+                  {shareMutation.isPending
+                    ? "Gerando link..."
+                    : "Gerar link compartilhável"}
+                </Button>
+              )}
+              {shareMutation.error && (
+                <ErrorMessage
+                  className="mt-4"
+                  message={
+                    shareMutation.error instanceof ApiError
+                      ? shareMutation.error.message
+                      : "Não foi possível compartilhar este ingresso."
+                  }
+                />
+              )}
+              {shareUrl && (
+                <div className="mt-4">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      aria-label="Link público do ingresso"
+                      readOnly
+                      value={shareUrl}
+                      onFocus={(event) => event.currentTarget.select()}
+                    />
+                    <Button type="button" onClick={copyShareUrl}>
+                      Copiar link
+                    </Button>
+                  </div>
+                  {copyFeedback && (
+                    <p className="mt-2 text-sm text-slate-600" role="status">
+                      {copyFeedback}
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
             <Link
               href="/my-tickets"
               className={cn(buttonVariants({ variant: "outline" }), "mt-6")}

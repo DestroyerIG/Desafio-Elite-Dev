@@ -1,15 +1,18 @@
 import asyncio
 import os
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from sqlalchemy import func, select
 
+from app.core.security import create_ticket_token, hash_opaque_token
 from app.database.session import async_session_factory, engine
 from app.integrations.ticketmaster.client import get_ticketmaster_client
 from app.main import app
+from app.models.enums import TicketStatus, ValidationResult
 from app.models.payment import Payment
+from app.models.ticket import Ticket, TicketShare, TicketValidation
 from app.modules.catalog.schemas import CatalogEvent
 
 
@@ -552,6 +555,264 @@ async def test_payment_issues_exact_ticket_quantity_and_protects_qr() -> None:
                     if ticket["reservation_id"] == concurrent_reservation_id
                 ]
             ) == 1
+    finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_sharing_and_gate_validation_are_secure_and_atomic() -> None:
+    app.dependency_overrides[get_ticketmaster_client] = fake_catalog_dependency
+    first_external_id = f"gate-first-{uuid4().hex}"
+    second_external_id = f"gate-second-{uuid4().hex}"
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            organizer_login, customer_login, other_customer_login, gate_login = (
+                await asyncio.gather(
+                    client.post(
+                        "/api/v1/auth/login",
+                        json={
+                            "email": "organizer@example.com",
+                            "password": "DevOnly123!",
+                        },
+                    ),
+                    client.post(
+                        "/api/v1/auth/login",
+                        json={
+                            "email": "customer1@example.com",
+                            "password": "DevOnly123!",
+                        },
+                    ),
+                    client.post(
+                        "/api/v1/auth/login",
+                        json={
+                            "email": "customer2@example.com",
+                            "password": "DevOnly123!",
+                        },
+                    ),
+                    client.post(
+                        "/api/v1/auth/login",
+                        json={
+                            "email": "gate@example.com",
+                            "password": "DevOnly123!",
+                        },
+                    ),
+                )
+            )
+            assert all(
+                response.status_code == 200
+                for response in (
+                    organizer_login,
+                    customer_login,
+                    other_customer_login,
+                    gate_login,
+                )
+            )
+
+            organizer_headers = {
+                "Authorization": f"Bearer {organizer_login.json()['access_token']}"
+            }
+            customer_headers = {
+                "Authorization": f"Bearer {customer_login.json()['access_token']}"
+            }
+            other_customer_headers = {
+                "Authorization": (
+                    f"Bearer {other_customer_login.json()['access_token']}"
+                )
+            }
+            gate_headers = {
+                "Authorization": f"Bearer {gate_login.json()['access_token']}"
+            }
+
+            first_event = await client.post(
+                "/api/v1/events",
+                headers=organizer_headers,
+                json={
+                    "external_id": first_external_id,
+                    "capacity": 1,
+                    "ticket_price": "40.00",
+                },
+            )
+            second_event = await client.post(
+                "/api/v1/events",
+                headers=organizer_headers,
+                json={
+                    "external_id": second_external_id,
+                    "capacity": 1,
+                    "ticket_price": "50.00",
+                },
+            )
+            assert first_event.status_code == 201
+            assert second_event.status_code == 201
+            first_event_id = first_event.json()["id"]
+            second_event_id = second_event.json()["id"]
+
+            reservation = await client.post(
+                f"/api/v1/events/{first_event_id}/reservations",
+                headers=customer_headers,
+                json={"quantity": 1},
+            )
+            assert reservation.status_code == 201
+            payment = await client.post(
+                f"/api/v1/reservations/{reservation.json()['id']}/payments",
+                headers=customer_headers,
+                json={"card_number": "4242424242424242"},
+            )
+            assert payment.status_code == 201
+            ticket_id = payment.json()["ticket_ids"][0]
+
+            ticket_detail = await client.get(
+                f"/api/v1/tickets/{ticket_id}",
+                headers=customer_headers,
+            )
+            assert ticket_detail.status_code == 200
+            public_code = ticket_detail.json()["public_code"]
+
+            hidden_share = await client.post(
+                f"/api/v1/tickets/{ticket_id}/share",
+                headers=other_customer_headers,
+            )
+            assert hidden_share.status_code == 404
+
+            share = await client.post(
+                f"/api/v1/tickets/{ticket_id}/share",
+                headers=customer_headers,
+            )
+            assert share.status_code == 201
+            share_token = share.json()["token"]
+            assert share.json()["expires_at"] is None
+
+            shared_detail = await client.get(
+                f"/api/v1/shared-tickets/{share_token}"
+            )
+            shared_qr = await client.get(
+                f"/api/v1/shared-tickets/{share_token}/qr"
+            )
+            invalid_share = await client.get(
+                "/api/v1/shared-tickets/token-inexistente"
+            )
+            assert shared_detail.status_code == 200
+            assert set(shared_detail.json()) == {
+                "public_code",
+                "status",
+                "used_at",
+                "event",
+            }
+            assert shared_detail.json()["public_code"] == public_code
+            assert shared_qr.status_code == 200
+            assert shared_qr.content.startswith(b"\x89PNG\r\n\x1a\n")
+            assert invalid_share.status_code == 404
+
+            async with async_session_factory() as session:
+                stored_share_hash = await session.scalar(
+                    select(TicketShare.token_hash).where(
+                        TicketShare.ticket_id == UUID(ticket_id)
+                    )
+                )
+            assert stored_share_hash == hash_opaque_token(share_token)
+            assert share_token != stored_share_hash
+
+            forbidden_gate = await client.post(
+                "/api/v1/gate/validate",
+                headers=customer_headers,
+                json={"event_id": first_event_id, "credential": public_code},
+            )
+            assert forbidden_gate.status_code == 403
+
+            wrong_event = await client.post(
+                "/api/v1/gate/validate",
+                headers=gate_headers,
+                json={"event_id": second_event_id, "credential": public_code},
+            )
+            invalid_code = await client.post(
+                "/api/v1/gate/validate",
+                headers=gate_headers,
+                json={
+                    "event_id": first_event_id,
+                    "credential": "ELT-NAO-EXISTE",
+                },
+            )
+            assert wrong_event.json()["result"] == "WRONG_EVENT"
+            assert invalid_code.json()["result"] == "INVALID"
+
+            qr_token = create_ticket_token(
+                UUID(ticket_id),
+                UUID(first_event_id),
+            )
+            token_parts = qr_token.split(".")
+            signature = token_parts[2]
+            middle = len(signature) // 2
+            token_parts[2] = (
+                signature[:middle]
+                + ("a" if signature[middle] != "a" else "b")
+                + signature[middle + 1 :]
+            )
+            tampered_qr = ".".join(token_parts)
+            tampered_validation = await client.post(
+                "/api/v1/gate/validate",
+                headers=gate_headers,
+                json={"event_id": first_event_id, "credential": tampered_qr},
+            )
+            assert tampered_validation.json()["result"] == "INVALID"
+
+            concurrent_validations = await asyncio.gather(
+                client.post(
+                    "/api/v1/gate/validate",
+                    headers=gate_headers,
+                    json={"event_id": first_event_id, "credential": qr_token},
+                ),
+                client.post(
+                    "/api/v1/gate/validate",
+                    headers=gate_headers,
+                    json={"event_id": first_event_id, "credential": public_code},
+                ),
+            )
+            assert all(
+                response.status_code == 200 for response in concurrent_validations
+            )
+            assert sorted(
+                response.json()["result"] for response in concurrent_validations
+            ) == ["ALREADY_USED", "VALID"]
+
+            third_validation = await client.post(
+                "/api/v1/gate/validate",
+                headers=gate_headers,
+                json={"event_id": first_event_id, "credential": public_code},
+            )
+            assert third_validation.json()["result"] == "ALREADY_USED"
+
+            shared_after_use = await client.get(
+                f"/api/v1/shared-tickets/{share_token}"
+            )
+            assert shared_after_use.json()["status"] == "USED"
+
+            async with async_session_factory() as session:
+                ticket = await session.get(Ticket, UUID(ticket_id))
+                validation_results = list(
+                    await session.scalars(
+                        select(TicketValidation.result).where(
+                            TicketValidation.ticket_id == UUID(ticket_id)
+                        )
+                    )
+                )
+                invalid_without_ticket = await session.scalar(
+                    select(func.count(TicketValidation.id)).where(
+                        TicketValidation.event_id == UUID(first_event_id),
+                        TicketValidation.ticket_id.is_(None),
+                        TicketValidation.result == ValidationResult.INVALID,
+                    )
+                )
+            assert ticket is not None
+            assert ticket.status == TicketStatus.USED
+            assert ticket.used_at is not None
+            assert validation_results.count(ValidationResult.VALID) == 1
+            assert validation_results.count(ValidationResult.ALREADY_USED) == 2
+            assert validation_results.count(ValidationResult.WRONG_EVENT) == 1
+            assert invalid_without_ticket == 2
     finally:
         app.dependency_overrides.clear()
         await engine.dispose()

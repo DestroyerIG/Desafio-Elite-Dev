@@ -4,7 +4,7 @@
 
 Plataforma full-stack de eventos e ingressos do Desafio Elite Dev 2026. O MVP será desenvolvido em fases e cobrirá publicação de eventos, reserva com proteção contra overselling, pagamento simulado, emissão de ingressos individuais, QR assinado, compartilhamento e validação na portaria.
 
-Ao final da Fase 4, o repositório contém autenticação JWT com RBAC, catálogo externo da Ticketmaster, publicação de cópias locais de eventos, reservas protegidas contra overselling, pagamento simulado e emissão de ingressos individuais com QR assinado. O Next.js oferece as experiências pública, do organizador, checkout do cliente e as áreas "Minhas reservas" e "Meus ingressos". Portaria e compartilhamento permanecem para a próxima fase.
+Ao final da Fase 5, o repositório contém o fluxo principal completo: autenticação JWT com RBAC, catálogo externo da Ticketmaster, publicação local de eventos, reservas protegidas contra overselling, pagamento simulado, ingressos individuais com QR assinado, compartilhamento público somente leitura e validação transacional na portaria. O Next.js oferece experiências específicas para público, cliente, organizador e portaria.
 
 ## Arquitetura
 
@@ -19,7 +19,7 @@ Detalhes estão em [docs/architecture.md](docs/architecture.md).
 
 ## Stack
 
-- Frontend: Next.js, React, TypeScript, Tailwind CSS, TanStack Query e Zod.
+- Frontend: Next.js, React, TypeScript, Tailwind CSS, TanStack Query, Zod e jsQR.
 - Backend: Python, FastAPI, Pydantic, SQLAlchemy 2, Alembic, HTTPX, PyJWT, qrcode e Argon2.
 - Banco: PostgreSQL 16.
 - Ambiente local: Docker Compose para o banco.
@@ -91,11 +91,19 @@ POST   /api/v1/reservations/{id}/payments
 GET    /api/v1/me/tickets
 GET    /api/v1/tickets/{id}
 GET    /api/v1/tickets/{id}/qr
+POST   /api/v1/tickets/{id}/share
+GET    /api/v1/shared-tickets/{token}
+GET    /api/v1/shared-tickets/{token}/qr
+POST   /api/v1/gate/validate
 ```
 
-Cadastro público sempre cria um `CUSTOMER`. Pesquisa no catálogo e mutações de eventos exigem um JWT de `ORGANIZER`; a listagem e o detalhe de eventos publicados são públicos. Somente o `CUSTOMER` proprietário lista, acessa, cancela ou paga suas reservas e consulta seus ingressos.
+Cadastro público sempre cria um `CUSTOMER`. Pesquisa no catálogo e mutações de eventos exigem um JWT de `ORGANIZER`; a listagem e o detalhe de eventos publicados são públicos. Somente o `CUSTOMER` proprietário lista, acessa, cancela ou paga suas reservas e consulta ou compartilha seus ingressos. Apenas usuários `GATE` validam entradas.
 
 O gateway de pagamento é simulado. O cartão de teste `4242 4242 4242 4242` é aprovado; números terminados em `0000` são recusados. O número é usado somente durante a chamada e não é persistido. Cada tentativa fica registrada. Depois de uma recusa, a reserva continua `PENDING` e pode ser retomada em "Minhas reservas" com outro cartão. O estoque permanece reservado até o pagamento ou cancelamento manual, e ingressos são emitidos somente após a aprovação. A resposta aprovada informa os IDs emitidos e o checkout abre diretamente o primeiro ingresso com seu QR; os demais permanecem em "Meus ingressos".
+
+O proprietário pode gerar um link público para um ingresso. O token aleatório aparece somente na resposta de criação e o PostgreSQL recebe apenas seu SHA-256. O link permite consultar os dados e o QR, sem qualquer operação de alteração. Na rota `/gate`, a portaria escolhe o evento e usa câmera ou código manual. O backend bloqueia o ticket com `SELECT FOR UPDATE`, marca `USED` e registra toda tentativa como `VALID`, `INVALID`, `ALREADY_USED` ou `WRONG_EVENT`.
+
+Para validar manualmente a Fase 5: entre como cliente, abra um ingresso pago e gere o link compartilhável; teste-o em uma janela anônima. Depois entre como `gate@example.com`, acesse `/gate`, selecione o evento e leia o QR ou informe o `public_code`. A primeira leitura correta deve liberar a entrada e a segunda deve informar que o ingresso já foi utilizado.
 
 ## Migrations
 
@@ -129,7 +137,7 @@ python -m pip install -r requirements-dev.txt
 pytest -q
 ```
 
-O teste ponta a ponta do backend é opt-in porque cria dados em um PostgreSQL isolado. Aponte `DATABASE_URL` para essa base, execute migration e seed, defina `RUN_INTEGRATION_TESTS=1` e rode `pytest -q` novamente. Nunca use uma base com dados importantes. A suíte comprova reserva concorrente sem overselling, pagamento recusado sem ingresso, nova tentativa aprovada na mesma reserva, histórico privado de reservas, pagamento concorrente sem duplicação, emissão de exatamente N ingressos e acesso protegido ao QR.
+O teste ponta a ponta do backend é opt-in porque cria dados em um PostgreSQL isolado. Aponte `DATABASE_URL` para essa base, execute migration e seed, defina `RUN_INTEGRATION_TESTS=1` e rode `pytest -q` novamente. Nunca use uma base com dados importantes. A suíte comprova reserva concorrente sem overselling, pagamento recusado sem ingresso, nova tentativa aprovada na mesma reserva, pagamento concorrente sem duplicação, emissão exata, QR e propriedade protegidos, hash do compartilhamento, QR adulterado, evento errado e validação concorrente sem dupla entrada.
 
 No frontend:
 
@@ -150,10 +158,11 @@ O uso de assistência por IA está descrito com transparência em [docs/ai-usage
 - Sem `TICKETMASTER_API_KEY`, o catálogo retorna um erro de configuração explícito; eventos locais publicados continuam disponíveis.
 - O pagamento é deliberadamente simulado. Todas as tentativas são registradas, mas nenhum dado de cartão é persistido; uma recusa mantém a reserva pendente para nova tentativa.
 - O QR é gerado sob demanda a partir de um JWT assinado; somente seu hash é persistido. Rotação de `TICKET_SECRET` exige uma estratégia de reemissão, ainda fora do MVP.
-- Portaria e compartilhamento ainda não estão implementados.
+- Links de compartilhamento não expiram e ainda não possuem revogação pela interface; o schema já reserva `expires_at` e `revoked_at` para essa evolução.
+- O scanner processa imagens localmente com `jsQR`. A câmera depende de permissão do usuário e de contexto seguro (`HTTPS` ou `localhost`); o código manual permanece disponível como fallback.
 - Reservas permanecem `PENDING` até pagamento ou cancelamento manual. A expiração automática foi conscientemente adiada até o MVP principal estar completo.
 - Mapas de assento, filas, cache e pagamentos reais estão fora do MVP inicial.
 
 ## Melhorias futuras
 
-As próximas fases seguirão a ordem: portaria e compartilhamento; testes e qualidade; entrega.
+As próximas fases seguirão a ordem: testes e qualidade; entrega.

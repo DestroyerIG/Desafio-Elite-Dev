@@ -44,6 +44,14 @@ export function SiteHeader() {
               </Link>
             </>
           )}
+          {user?.role === "GATE" && (
+            <Link
+              href="/gate"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+            >
+              Portaria
+            </Link>
+          )}
           {!isLoading && !user && (
             <Link href="/login" className={cn(buttonVariants({ size: "sm" }))}>
               Entrar
