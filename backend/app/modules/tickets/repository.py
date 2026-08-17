@@ -4,7 +4,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.seat import EventSeat
 from app.models.ticket import Ticket, TicketShare
+
+
+TICKET_SEAT_LOAD = selectinload(Ticket.seat).selectinload(EventSeat.section)
 
 
 async def list_customer_tickets(
@@ -15,6 +19,7 @@ async def list_customer_tickets(
         select(Ticket)
         .where(Ticket.owner_id == customer_id)
         .options(selectinload(Ticket.event))
+        .options(TICKET_SEAT_LOAD)
         .order_by(Ticket.created_at.desc(), Ticket.id)
     )
     return list(result)
@@ -29,6 +34,7 @@ async def get_customer_ticket(
         select(Ticket)
         .where(Ticket.id == ticket_id, Ticket.owner_id == customer_id)
         .options(selectinload(Ticket.event))
+        .options(TICKET_SEAT_LOAD)
     )
 
 
@@ -41,6 +47,7 @@ async def get_customer_ticket_for_update(
         select(Ticket)
         .where(Ticket.id == ticket_id, Ticket.owner_id == customer_id)
         .options(selectinload(Ticket.event))
+        .options(TICKET_SEAT_LOAD)
         .with_for_update()
     )
 
@@ -63,4 +70,5 @@ async def get_ticket_share_by_hash(
         select(TicketShare)
         .where(TicketShare.token_hash == token_hash)
         .options(selectinload(TicketShare.ticket).selectinload(Ticket.event))
+        .options(selectinload(TicketShare.ticket).options(TICKET_SEAT_LOAD))
     )

@@ -14,6 +14,17 @@ class EventStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
+class SeatingMode(str, Enum):
+    GENERAL_ADMISSION = "GENERAL_ADMISSION"
+    ASSIGNED = "ASSIGNED"
+
+
+class SeatStatus(str, Enum):
+    AVAILABLE = "AVAILABLE"
+    HELD = "HELD"
+    SOLD = "SOLD"
+
+
 class ReservationStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"

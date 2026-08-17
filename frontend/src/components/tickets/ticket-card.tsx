@@ -44,6 +44,11 @@ export function TicketCard({ ticket }: { ticket: Ticket }) {
         <p className="mt-2 text-sm leading-6 text-slate-600">
           {ticket.event.venue_name} · {ticket.event.venue_address}
         </p>
+        {ticket.seat && (
+          <p className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-900">
+            {ticket.seat.section.name} · Fileira {ticket.seat.row_label} · Assento {ticket.seat.number}
+          </p>
+        )}
         <div className="mt-5 flex items-center justify-between gap-4 border-t border-slate-100 pt-4">
           <span className="font-mono text-xs font-medium text-slate-600">
             {ticket.public_code}

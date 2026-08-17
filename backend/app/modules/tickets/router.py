@@ -28,7 +28,11 @@ DatabaseSession = Annotated[AsyncSession, Depends(get_db_session)]
 Customer = Annotated[User, Depends(require_roles(UserRole.CUSTOMER))]
 
 
-@router.get("/me/tickets", response_model=list[TicketResponse])
+@router.get(
+    "/me/tickets",
+    response_model=list[TicketResponse],
+    response_model_exclude_defaults=True,
+)
 async def customer_tickets(
     session: DatabaseSession,
     customer: Customer,
@@ -37,7 +41,11 @@ async def customer_tickets(
     return [TicketResponse.model_validate(ticket) for ticket in tickets]
 
 
-@router.get("/tickets/{ticket_id}", response_model=TicketResponse)
+@router.get(
+    "/tickets/{ticket_id}",
+    response_model=TicketResponse,
+    response_model_exclude_defaults=True,
+)
 async def ticket_detail(
     ticket_id: UUID,
     session: DatabaseSession,
@@ -86,6 +94,7 @@ async def create_ticket_share(
 @router.get(
     "/shared-tickets/{token}",
     response_model=SharedTicketResponse,
+    response_model_exclude_defaults=True,
 )
 async def shared_ticket_detail(
     token: str,

@@ -12,6 +12,7 @@ from app.models.mixins import TimestampMixin
 if TYPE_CHECKING:
     from app.models.event import Event
     from app.models.reservation import Reservation
+    from app.models.seat import EventSeat
     from app.models.user import User
 
 
@@ -34,6 +35,9 @@ class Ticket(TimestampMixin, Base):
     owner_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), index=True, nullable=False
     )
+    seat_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("event_seats.id", ondelete="RESTRICT"), index=True
+    )
     public_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     qr_token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     status: Mapped[TicketStatus] = mapped_column(
@@ -46,6 +50,7 @@ class Ticket(TimestampMixin, Base):
     reservation: Mapped["Reservation"] = relationship(back_populates="tickets")
     event: Mapped["Event"] = relationship(back_populates="tickets")
     owner: Mapped["User"] = relationship(back_populates="tickets")
+    seat: Mapped["EventSeat | None"] = relationship(back_populates="tickets")
     shares: Mapped[list["TicketShare"]] = relationship(back_populates="ticket")
     validations: Mapped[list["TicketValidation"]] = relationship(back_populates="ticket")
 

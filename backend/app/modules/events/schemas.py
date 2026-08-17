@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.enums import EventStatus
+from app.models.enums import EventStatus, SeatingMode
 
 
 class EventCreate(BaseModel):
@@ -97,5 +97,6 @@ class EventResponse(BaseModel):
     available_tickets: int
     ticket_price: Decimal
     status: EventStatus
+    seating_mode: SeatingMode
     created_at: datetime
     updated_at: datetime

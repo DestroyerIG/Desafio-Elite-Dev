@@ -116,6 +116,14 @@ export function TicketDetails({ ticketId }: { ticketId: string }) {
                   {statusLabels[ticket.status]}
                 </dd>
               </div>
+              {ticket.seat && (
+                <div>
+                  <dt className="font-medium text-slate-500">Lugar marcado</dt>
+                  <dd className="mt-1 font-semibold text-slate-950">
+                    {ticket.seat.section.name} · Fileira {ticket.seat.row_label} · Assento {ticket.seat.number}
+                  </dd>
+                </div>
+              )}
             </dl>
             {ticket.status === "ACTIVE" ? (
               <section className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-5">

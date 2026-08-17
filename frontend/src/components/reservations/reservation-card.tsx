@@ -68,6 +68,18 @@ export function ReservationCard({
               </dd>
             </div>
           </dl>
+          {reservation.seats.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Assentos
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {reservation.seats
+                  .map((seat) => `${seat.section.name} · ${seat.label}`)
+                  .join(", ")}
+              </p>
+            </div>
+          )}
           {isPaid && (
             <p className="mt-4 text-xs leading-5 text-slate-500">
               Reembolso integral disponível em até 7 dias do pagamento e com
@@ -108,6 +120,14 @@ export function ReservationCard({
                   {isRefunding ? "Reembolsando..." : "Solicitar reembolso"}
                 </Button>
               </>
+            )}
+            {reservation.status === "EXPIRED" && reservation.seats.length > 0 && (
+              <Link
+                href={`/events/${reservation.event_id}/seats`}
+                className={cn(buttonVariants())}
+              >
+                Escolher outros assentos
+              </Link>
             )}
             <Link
               href={`/events/${reservation.event_id}`}

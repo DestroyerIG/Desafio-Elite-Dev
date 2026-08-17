@@ -36,6 +36,7 @@ export function Checkout({
   const { user, isLoading: authIsLoading } = useAuth();
   const [quantity, setQuantity] = useState("1");
   const [cardNumber, setCardNumber] = useState("");
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [formError, setFormError] = useState<string | null>(null);
   const [createdReservation, setCreatedReservation] =
     useState<Reservation | null>(null);
@@ -63,6 +64,32 @@ export function Checkout({
     queryFn: () => getReservation(reservationId as string),
     enabled: isCustomer && Boolean(reservationId),
   });
+  const reservationForTimer = createdReservation ?? reservationQuery.data;
+  const expirationTime = reservationForTimer?.expires_at
+    ? new Date(reservationForTimer.expires_at).getTime()
+    : null;
+
+  useEffect(() => {
+    if (
+      reservationForTimer?.status !== "PENDING" ||
+      expirationTime === null
+    ) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setCurrentTime(now);
+      if (now >= expirationTime) {
+        window.clearInterval(timer);
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["events"] }),
+          queryClient.invalidateQueries({ queryKey: ["seat-map", eventId] }),
+          queryClient.invalidateQueries({ queryKey: ["reservations"] }),
+        ]);
+      }
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [eventId, expirationTime, queryClient, reservationForTimer?.status]);
   const createMutation = useMutation({
     mutationFn: (selectedQuantity: number) =>
       createReservation(eventId, selectedQuantity),
@@ -202,6 +229,11 @@ export function Checkout({
     const wasPaid = reservation.status === "PAID";
     const wasRefunded = reservation.status === "REFUNDED";
     const isPending = reservation.status === "PENDING";
+    const remainingSeconds =
+      isPending && expirationTime !== null
+        ? Math.max(0, Math.ceil((expirationTime - currentTime) / 1_000))
+        : null;
+    const holdExpired = remainingSeconds === 0;
     const paymentWasDeclined =
       paymentMutation.error instanceof ApiError &&
       paymentMutation.error.code === "PAYMENT_DECLINED";
@@ -253,7 +285,49 @@ export function Checkout({
             </div>
           </dl>
 
-          {isPending && (
+          {reservation.seats.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-slate-950">
+                Assentos escolhidos
+              </h2>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {reservation.seats.map((seat) => (
+                  <li
+                    key={seat.id}
+                    className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-900"
+                  >
+                    {seat.section.name} · {seat.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {isPending && remainingSeconds !== null && !holdExpired && (
+            <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4" role="timer">
+              <p className="text-sm font-semibold text-amber-900">
+                Tempo para concluir: {String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:
+                {String(remainingSeconds % 60).padStart(2, "0")}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-amber-800">
+                Ao final do prazo, os assentos voltarão automaticamente ao mapa.
+              </p>
+            </div>
+          )}
+
+          {isPending && holdExpired && (
+            <div className="mt-6">
+              <ErrorMessage message="O prazo desta reserva terminou. Os assentos estão sendo devolvidos ao mapa." />
+              <Link
+                href={`/events/${eventId}/seats`}
+                className={cn(buttonVariants(), "mt-4")}
+              >
+                Escolher novos assentos
+              </Link>
+            </div>
+          )}
+
+          {isPending && !holdExpired && (
             <form
               onSubmit={handlePayment}
               className="mt-6 rounded-lg border border-blue-100 bg-blue-50/50 p-5"
@@ -345,7 +419,41 @@ export function Checkout({
                 {cancelMutation.isPending ? "Cancelando..." : "Cancelar reserva"}
               </Button>
             )}
+            {(wasCancelled || reservation.status === "EXPIRED") &&
+              reservation.seats.length > 0 && (
+                <Link
+                  href={`/events/${eventId}/seats`}
+                  className={cn(buttonVariants())}
+                >
+                  Escolher outros assentos
+                </Link>
+              )}
           </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (event.seating_mode === "ASSIGNED") {
+    return (
+      <main className="mx-auto max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+            Assentos marcados
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+            Escolha seus lugares no mapa
+          </h1>
+          <p className="mt-3 leading-7 text-slate-600">
+            Este evento não aceita reservas somente por quantidade. Selecione os
+            assentos disponíveis para iniciar o prazo de pagamento.
+          </p>
+          <Link
+            href={`/events/${eventId}/seats`}
+            className={cn(buttonVariants(), "mt-6")}
+          >
+            Abrir mapa de assentos
+          </Link>
         </section>
       </main>
     );

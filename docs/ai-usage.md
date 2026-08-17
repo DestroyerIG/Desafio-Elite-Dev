@@ -2,7 +2,7 @@
 
 O desenvolvimento deste projeto teve assistência do OpenAI Codex.
 
-Até a Fase 4, a IA foi usada para:
+A IA foi usada para:
 
 - ler e organizar os requisitos do roadmap;
 - propor a estrutura inicial do repositório;
@@ -27,5 +27,10 @@ Até a Fase 4, a IA foi usada para:
 - implementar compartilhamento por token opaco com persistência apenas de hash;
 - revisar a ordem transacional e criar testes concorrentes para validação única na portaria;
 - construir leitura local de QR pela câmera, fallback manual e feedback dos quatro resultados obrigatórios.
+- modelar setores, assentos, vínculos históricos e constraints de exclusividade;
+- implementar holds temporários, expiração automática e integração transacional com pagamento, cancelamento e reembolso;
+- estruturar atualização em tempo real com PostgreSQL `LISTEN/NOTIFY`, WebSocket, versionamento e fallback por polling;
+- construir o editor do organizador, o mapa acessível do cliente, o cronômetro e a identificação do assento nos ingressos;
+- validar migration reversível, concorrência pelo mesmo lugar e devolução exata ao estoque em PostgreSQL isolado.
 
 As sugestões precisam ser revisadas como qualquer contribuição de código. Decisões de produto, credenciais reais e aprovação para avançar entre fases continuam sob controle do responsável pelo projeto.

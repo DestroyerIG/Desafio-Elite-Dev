@@ -36,6 +36,11 @@ from app.modules.reservations.repository import (
     get_customer_reservation,
     get_event_for_update,
 )
+from app.modules.seats.service import (
+    mark_reservation_seats_sold,
+    notify_seat_map_changed,
+    release_reservation_seats,
+)
 
 
 REFUND_REQUEST_WINDOW = timedelta(days=7)
@@ -70,9 +75,15 @@ def _build_tickets(
     event_id: UUID,
     owner_id: UUID,
     quantity: int,
+    seat_ids: list[UUID] | None = None,
 ) -> list[Ticket]:
     tickets: list[Ticket] = []
-    for _ in range(quantity):
+    assigned_seats: list[UUID | None] = (
+        list(seat_ids) if seat_ids is not None else [None] * quantity
+    )
+    if len(assigned_seats) != quantity:
+        raise ValueError("The number of seats must match the ticket quantity")
+    for seat_id in assigned_seats:
         ticket_id = uuid4()
         token = create_ticket_token(ticket_id, event_id)
         tickets.append(
@@ -81,6 +92,7 @@ def _build_tickets(
                 reservation_id=reservation_id,
                 event_id=event_id,
                 owner_id=owner_id,
+                seat_id=seat_id,
                 public_code=_new_public_code(),
                 qr_token_hash=hash_ticket_token(token),
                 status=TicketStatus.ACTIVE,
@@ -97,13 +109,21 @@ async def pay_reservation(
     gateway: PaymentGateway,
 ) -> PaymentOutcome:
     try:
+        existing_reservation = await get_customer_reservation(
+            session, reservation_id, customer.id
+        )
+        if existing_reservation is None:
+            raise AppError("RESERVATION_NOT_FOUND", "Reserva não encontrada.", 404)
+        event = await get_event_for_update(
+            session, existing_reservation.event_id
+        )
         reservation = await get_customer_reservation(
             session,
             reservation_id,
             customer.id,
             for_update=True,
         )
-        if reservation is None:
+        if event is None or reservation is None:
             raise AppError("RESERVATION_NOT_FOUND", "Reserva não encontrada.", 404)
 
         if reservation.status == ReservationStatus.PAID:
@@ -133,6 +153,20 @@ async def pay_reservation(
                 409,
             )
 
+        now = datetime.now(UTC)
+        if reservation.expires_at is not None and reservation.expires_at <= now:
+            map_version = await release_reservation_seats(session, reservation, now)
+            event.available_tickets += reservation.quantity
+            reservation.status = ReservationStatus.EXPIRED
+            if map_version is not None:
+                await notify_seat_map_changed(session, event.id, map_version)
+            await session.commit()
+            raise AppError(
+                "RESERVATION_EXPIRED",
+                "A reserva temporária expirou. Escolha os assentos novamente.",
+                409,
+            )
+
         result = await gateway.authorize(
             amount=reservation.total_amount,
             card_number=data.card_number,
@@ -154,14 +188,20 @@ async def pay_reservation(
                 402,
             )
 
+        seats, map_version = await mark_reservation_seats_sold(
+            session, reservation
+        )
         tickets = _build_tickets(
             reservation_id=reservation.id,
             event_id=reservation.event_id,
             owner_id=customer.id,
             quantity=reservation.quantity,
+            seat_ids=[seat.id for seat in seats] if map_version is not None else None,
         )
         reservation.status = ReservationStatus.PAID
         await add_tickets(session, tickets)
+        if map_version is not None:
+            await notify_seat_map_changed(session, event.id, map_version)
         await session.commit()
         await session.refresh(payment)
         return PaymentOutcome(payment, sorted(ticket.id for ticket in tickets))
@@ -309,11 +349,14 @@ async def refund_paid_reservation(
             return RefundOutcome(refund, reservation, 0)
 
         ticket_ids = [ticket.id for ticket in tickets]
+        map_version = await release_reservation_seats(session, reservation, now)
         event.available_tickets += reservation.quantity
         reservation.status = ReservationStatus.REFUNDED
         for ticket in tickets:
             ticket.status = TicketStatus.REFUNDED
         await revoke_ticket_shares(session, ticket_ids, now)
+        if map_version is not None:
+            await notify_seat_map_changed(session, event.id, map_version)
 
         await session.commit()
         await session.refresh(refund)

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError
 from app.integrations.ticketmaster.client import TicketmasterClient
-from app.models.enums import EventStatus
+from app.models.enums import EventStatus, SeatingMode
 from app.models.event import Event
 from app.models.user import User
 from app.modules.events.repository import (
@@ -101,6 +101,12 @@ async def update_organizer_event(
         changes["image_url"] = str(changes["image_url"])
 
     if new_capacity := changes.pop("capacity", None):
+        if event.seating_mode == SeatingMode.ASSIGNED:
+            raise AppError(
+                "SEAT_MAP_CAPACITY_LOCKED",
+                "Remova ou reconfigure o mapa antes de alterar a capacidade.",
+                409,
+            )
         reserved_tickets = event.capacity - event.available_tickets
         if new_capacity < reserved_tickets:
             raise AppError(

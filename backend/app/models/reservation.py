@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.event import Event
     from app.models.payment import Payment
     from app.models.refund import Refund
+    from app.models.seat import EventSeat, ReservationSeat
     from app.models.ticket import Ticket
     from app.models.user import User
 
@@ -51,3 +52,12 @@ class Reservation(TimestampMixin, Base):
         back_populates="reservation", uselist=False
     )
     tickets: Mapped[list["Ticket"]] = relationship(back_populates="reservation")
+    seat_assignments: Mapped[list["ReservationSeat"]] = relationship(
+        back_populates="reservation",
+        order_by="ReservationSeat.created_at",
+    )
+    seats: Mapped[list["EventSeat"]] = relationship(
+        secondary="reservation_seats",
+        viewonly=True,
+        order_by="EventSeat.position",
+    )

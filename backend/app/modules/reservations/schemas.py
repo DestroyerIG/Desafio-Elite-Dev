@@ -11,6 +11,23 @@ class ReservationCreate(BaseModel):
     quantity: int = Field(gt=0, le=1_000_000)
 
 
+class ReservationSeatSectionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+
+
+class ReservationSeatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    row_label: str
+    number: int
+    label: str
+    section: ReservationSeatSectionResponse
+
+
 class ReservationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -24,6 +41,7 @@ class ReservationResponse(BaseModel):
     expires_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    seats: list[ReservationSeatResponse]
 
 
 class ReservationEventResponse(BaseModel):

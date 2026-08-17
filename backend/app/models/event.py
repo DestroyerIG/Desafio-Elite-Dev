@@ -7,11 +7,12 @@ from sqlalchemy import CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, In
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
-from app.models.enums import EventStatus, enum_values
+from app.models.enums import EventStatus, SeatingMode, enum_values
 from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.reservation import Reservation
+    from app.models.seat import EventSeat, SeatMap
     from app.models.ticket import Ticket, TicketValidation
     from app.models.user import User
 
@@ -51,9 +52,17 @@ class Event(TimestampMixin, Base):
         default=EventStatus.DRAFT,
         nullable=False,
     )
+    seating_mode: Mapped[SeatingMode] = mapped_column(
+        SAEnum(SeatingMode, name="seating_mode", values_callable=enum_values),
+        default=SeatingMode.GENERAL_ADMISSION,
+        nullable=False,
+    )
 
     organizer: Mapped["User"] = relationship(back_populates="organized_events")
     reservations: Mapped[list["Reservation"]] = relationship(back_populates="event")
     tickets: Mapped[list["Ticket"]] = relationship(back_populates="event")
     validations: Mapped[list["TicketValidation"]] = relationship(back_populates="event")
-
+    seat_map: Mapped["SeatMap | None"] = relationship(
+        back_populates="event", uselist=False
+    )
+    seats: Mapped[list["EventSeat"]] = relationship(back_populates="event")

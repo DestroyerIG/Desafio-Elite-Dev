@@ -66,9 +66,19 @@ Cancelamento bloqueia primeiro o evento e depois a reserva. Manter uma ordem est
 
 Cancelar novamente uma reserva já `CANCELLED` não devolve estoque outra vez. O preço unitário e o total permanecem congelados na reserva para que mudanças futuras no preço do evento não alterem a intenção de compra existente.
 
-## Sem expiração automática nesta fase
+## Expiração restrita a holds de assentos
 
-`expires_at` permanece nulo. Expirar reservas exigiria um processo confiável para localizar pendências e devolver estoque exatamente uma vez. O roadmap orienta adiar essa automação até o MVP principal estar completo; nesta fase, a liberação ocorre apenas por cancelamento explícito.
+Reservas por quantidade preservam o comportamento anterior e mantêm `expires_at` nulo. Em eventos com assentos marcados, o hold recebe prazo de 10 minutos. Um processo em background localiza eventos vencidos e bloqueia evento, reservas, lugares e vínculos antes de devolver o estoque. A consulta do mapa e o pagamento também fazem a verificação de forma preguiçosa, evitando depender apenas da frequência do worker.
+
+## PostgreSQL como coordenador de tempo real
+
+O estado oficial continua no PostgreSQL. `LISTEN/NOTIFY` transporta apenas `event_id` e a versão confirmada do mapa; WebSockets notificam o navegador para buscar um snapshot novo. Isso evita introduzir Redis no MVP e funciona com múltiplas instâncias do FastAPI. Como notificações não são uma fila durável, o cliente reconecta com backoff e mantém polling de 15 segundos como recuperação.
+
+## Reserva atômica de assentos
+
+Eventos podem ser `GENERAL_ADMISSION` ou `ASSIGNED`. No segundo modo, o organizador gera setores retangulares cujo total deve ser igual à capacidade. A estrutura fica imutável depois da primeira reserva para preservar referências históricas.
+
+A seleção aceita até 10 lugares e bloqueia a linha do evento antes dos assentos ordenados por UUID. Todos precisam estar `AVAILABLE`; caso contrário a transação retorna `409` sem criar reserva parcial. Além dos estados `AVAILABLE`, `HELD` e `SOLD`, um índice parcial único em `reservation_seats.seat_id WHERE released_at IS NULL` protege a exclusividade ativa também no banco.
 
 ## Gateway de pagamento substituível
 
@@ -76,7 +86,7 @@ O service depende do contrato `PaymentGateway`; a Fase 4 fornece apenas `FakePay
 
 ## Pagamento e emissão na mesma transação
 
-O pagamento bloqueia a reserva com `SELECT FOR UPDATE`. Aprovação, mudança para `PAID` e criação de N tickets são confirmadas juntas; qualquer erro reverte tudo. Isso impede uma reserva paga sem todos os ingressos ou ingressos sem pagamento aprovado. Depois da aprovação, o status `PAID`, combinado ao lock, torna repetições idempotentes e evita novas cobranças ou emissão duplicada.
+O pagamento bloqueia evento e reserva com `SELECT FOR UPDATE`; para eventos marcados, bloqueia também o mapa e os assentos. Aprovação, mudança para `PAID` e criação de N tickets são confirmadas juntas; qualquer erro reverte tudo. Isso impede uma reserva paga sem todos os ingressos ou ingressos sem pagamento aprovado. Depois da aprovação, o status `PAID`, combinado ao lock, torna repetições idempotentes e evita novas cobranças ou emissão duplicada.
 
 O schema representa cada autorização como uma tentativa separada. Uma recusa é registrada, mantém a reserva `PENDING` e não cria ingressos; o cliente pode informar outro cartão e tentar novamente na mesma reserva. A migration `20260816_0002` removeu a unicidade de `payments.reservation_id` e criou um índice comum para suportar esse histórico sem armazenar números de cartão.
 

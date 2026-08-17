@@ -85,12 +85,20 @@ export function EventDetails({ eventId }: { eventId: string }) {
               <Link
                 href={
                   user
-                    ? `/checkout/${event.id}`
-                    : `/login?next=/checkout/${event.id}`
+                    ? event.seating_mode === "ASSIGNED"
+                      ? `/events/${event.id}/seats`
+                      : `/checkout/${event.id}`
+                    : `/login?next=${encodeURIComponent(
+                        event.seating_mode === "ASSIGNED"
+                          ? `/events/${event.id}/seats`
+                          : `/checkout/${event.id}`,
+                      )}`
                 }
                 className={cn(buttonVariants(), "w-full")}
               >
-                Reservar ingressos
+                {event.seating_mode === "ASSIGNED"
+                  ? "Escolher assentos"
+                  : "Reservar ingressos"}
               </Link>
             )}
           </div>

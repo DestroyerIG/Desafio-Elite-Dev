@@ -14,6 +14,7 @@ export interface AuthResponse {
 }
 
 export type EventStatus = "DRAFT" | "PUBLISHED" | "CANCELLED";
+export type SeatingMode = "GENERAL_ADMISSION" | "ASSIGNED";
 
 export interface Event {
   id: string;
@@ -30,6 +31,7 @@ export interface Event {
   available_tickets: number;
   ticket_price: string;
   status: EventStatus;
+  seating_mode: SeatingMode;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +53,41 @@ export type ReservationStatus =
   | "CANCELLED"
   | "EXPIRED";
 
+export type SeatStatus = "AVAILABLE" | "HELD" | "SOLD";
+
+export interface SeatSectionReference {
+  id: string;
+  name: string;
+}
+
+export interface ReservationSeat {
+  id: string;
+  row_label: string;
+  number: number;
+  label: string;
+  section: SeatSectionReference;
+}
+
+export interface Seat extends Omit<ReservationSeat, "section"> {
+  position: number;
+  status: SeatStatus;
+}
+
+export interface SeatSection extends SeatSectionReference {
+  position: number;
+  row_count: number;
+  seats_per_row: number;
+  seats: Seat[];
+}
+
+export interface SeatMap {
+  id: string;
+  event_id: string;
+  stage_label: string;
+  version: number;
+  sections: SeatSection[];
+}
+
 export interface Reservation {
   id: string;
   customer_id: string;
@@ -62,6 +99,7 @@ export interface Reservation {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
+  seats: ReservationSeat[];
 }
 
 export interface ReservationEvent {
@@ -129,6 +167,7 @@ export interface Ticket {
   used_at: string | null;
   created_at: string;
   event: TicketEvent;
+  seat?: ReservationSeat;
 }
 
 export interface TicketShare {
@@ -142,6 +181,7 @@ export interface SharedTicket {
   status: TicketStatus;
   used_at: string | null;
   event: TicketEvent;
+  seat?: ReservationSeat;
 }
 
 export type ValidationResult =

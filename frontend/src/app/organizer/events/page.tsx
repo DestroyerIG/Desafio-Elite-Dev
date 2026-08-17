@@ -107,15 +107,23 @@ export default function OrganizerEventsPage() {
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={deleteMutation.isPending}
-                        onClick={() => handleDelete(event.id, event.title)}
-                      >
-                        Remover
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Link
+                          href={`/organizer/events/${event.id}/seats`}
+                          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                        >
+                          {event.seating_mode === "ASSIGNED" ? "Editar mapa" : "Criar mapa"}
+                        </Link>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => handleDelete(event.id, event.title)}
+                        >
+                          Remover
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -127,4 +135,3 @@ export default function OrganizerEventsPage() {
     </main>
   );
 }
-

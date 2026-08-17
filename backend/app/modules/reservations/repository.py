@@ -7,6 +7,12 @@ from sqlalchemy.orm import selectinload
 from app.models.enums import EventStatus
 from app.models.event import Event
 from app.models.reservation import Reservation
+from app.models.seat import EventSeat
+
+
+RESERVATION_SEATS_LOAD = selectinload(Reservation.seats).selectinload(
+    EventSeat.section
+)
 
 
 async def get_published_event_for_update(
@@ -41,6 +47,7 @@ async def get_customer_reservation(
         Reservation.id == reservation_id,
         Reservation.customer_id == customer_id,
     )
+    query = query.options(RESERVATION_SEATS_LOAD)
     if for_update:
         query = query.with_for_update().execution_options(populate_existing=True)
     return await session.scalar(query)
@@ -54,6 +61,7 @@ async def list_customer_reservations(
         select(Reservation)
         .where(Reservation.customer_id == customer_id)
         .options(selectinload(Reservation.event))
+        .options(RESERVATION_SEATS_LOAD)
         .order_by(Reservation.created_at.desc(), Reservation.id)
     )
     return list(result)

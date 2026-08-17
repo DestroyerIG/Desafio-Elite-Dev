@@ -90,6 +90,11 @@ export function SharedTicketDetails({ token }: { token: string }) {
               <p className="mt-2 font-mono text-lg font-semibold text-slate-950">
                 {ticket.public_code}
               </p>
+              {ticket.seat && (
+                <p className="mt-4 text-sm font-semibold text-blue-900">
+                  {ticket.seat.section.name} · Fileira {ticket.seat.row_label} · Assento {ticket.seat.number}
+                </p>
+              )}
             </div>
             <p className="mt-5 text-sm leading-6 text-slate-600">
               Este é um acesso público somente para visualização. Alterações no

@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import TicketStatus
+from app.modules.reservations.schemas import ReservationSeatResponse
 
 
 class TicketEventResponse(BaseModel):
@@ -28,6 +29,7 @@ class TicketResponse(BaseModel):
     used_at: datetime | None
     created_at: datetime
     event: TicketEventResponse
+    seat: ReservationSeatResponse | None = None
 
 
 class TicketShareResponse(BaseModel):
@@ -43,3 +45,4 @@ class SharedTicketResponse(BaseModel):
     status: TicketStatus
     used_at: datetime | None
     event: TicketEventResponse
+    seat: ReservationSeatResponse | None = None
