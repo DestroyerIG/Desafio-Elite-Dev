@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import get_settings
@@ -38,6 +39,7 @@ async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.environment)
+    settings.upload_directory.mkdir(parents=True, exist_ok=True)
 
     application = FastAPI(
         title=settings.app_name,
@@ -65,6 +67,11 @@ def create_app() -> FastAPI:
     application.include_router(payments_router)
     application.include_router(tickets_router)
     application.include_router(gate_router)
+    application.mount(
+        "/uploads",
+        StaticFiles(directory=settings.upload_directory),
+        name="uploads",
+    )
     return application
 
 

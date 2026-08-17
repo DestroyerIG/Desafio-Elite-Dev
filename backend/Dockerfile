@@ -12,7 +12,9 @@ COPY alembic.ini .
 COPY migrations ./migrations
 COPY app ./app
 
+RUN mkdir -p /app/uploads
+VOLUME ["/app/uploads"]
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

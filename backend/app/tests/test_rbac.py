@@ -59,6 +59,41 @@ async def test_customer_cannot_create_event() -> None:
 
 
 @pytest.mark.asyncio
+async def test_customer_cannot_create_custom_event() -> None:
+    customer = User(
+        id=uuid4(),
+        name="Cliente",
+        email="customer@test.local",
+        password_hash="not-used",
+        role=UserRole.CUSTOMER,
+    )
+    app.dependency_overrides[get_current_user] = lambda: customer
+    app.dependency_overrides[get_db_session] = override_session
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.post(
+                "/api/v1/organizer/events",
+                data={
+                    "title": "Evento próprio",
+                    "venue_name": "Arena de Teste",
+                    "venue_address": "Rua de Teste, 10",
+                    "event_date": "2030-05-20T22:00:00Z",
+                    "capacity": "100",
+                    "ticket_price": "50.00",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
 async def test_organizer_cannot_create_reservation() -> None:
     organizer = User(
         id=uuid4(),

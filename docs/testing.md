@@ -39,7 +39,7 @@ python scripts/run_integration_tests.py
 
 | Regra crítica | Comprovação |
 |---|---|
-| CUSTOMER não cria evento | `test_customer_cannot_create_event` |
+| CUSTOMER não cria evento | `test_customer_cannot_create_event` e `test_customer_cannot_create_custom_event` |
 | Quantidade acima do estoque falha | `test_concurrent_reservations_do_not_oversell` |
 | Duas reservas não ultrapassam a capacidade | `test_concurrent_reservations_do_not_oversell` |
 | Pagamento recusado gera zero ingressos | `test_payment_issues_exact_ticket_quantity_and_protects_qr` |
@@ -51,4 +51,4 @@ python scripts/run_integration_tests.py
 | Respostas de erro seguem contrato único | `test_error_contract.py` |
 
 Os testes integrados também cobrem pagamento concorrente idempotente, reembolso concorrente,
-expiração de assentos e disputa pelo mesmo lugar.
+expiração de assentos, disputa pelo mesmo lugar e upload de imagem de evento.

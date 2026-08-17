@@ -58,6 +58,13 @@ export function publishEvent(data: {
   });
 }
 
+export function createOrganizerEvent(data: FormData) {
+  return apiRequest<Event>("/api/v1/organizer/events", {
+    method: "POST",
+    body: data,
+  });
+}
+
 export function deleteEvent(eventId: string) {
   return apiRequest<void>(`/api/v1/events/${eventId}`, { method: "DELETE" });
 }

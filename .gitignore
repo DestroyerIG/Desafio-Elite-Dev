@@ -13,6 +13,8 @@ __pycache__/
 venv/
 htmlcov/
 .coverage
+backend/uploads/*
+!backend/uploads/.gitkeep
 
 # Node / Next.js
 node_modules/
@@ -26,4 +28,3 @@ npm-debug.log*
 .vscode/
 .DS_Store
 Thumbs.db
-

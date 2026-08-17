@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-Plataforma full-stack de eventos e ingressos do Desafio Elite Dev 2026. O MVP será desenvolvido em fases e cobrirá publicação de eventos, reserva com proteção contra overselling, pagamento simulado, emissão de ingressos individuais, QR assinado, compartilhamento e validação na portaria.
+Plataforma full-stack de eventos e ingressos do Desafio Elite Dev 2026. O MVP cobre criação e importação de eventos, reserva com proteção contra overselling, pagamento simulado, emissão de ingressos individuais, QR assinado, compartilhamento e validação na portaria.
 
 O repositório contém o fluxo principal completo: autenticação JWT com RBAC, catálogo externo da Ticketmaster, publicação local de eventos, busca e filtros na agenda pública, reservas protegidas contra overselling, mapas de assentos em tempo real, pagamento e reembolso simulados, ingressos individuais com QR assinado, compartilhamento público somente leitura e validação transacional na portaria. O Next.js oferece experiências específicas para público, cliente, organizador e portaria.
 
@@ -84,6 +84,7 @@ POST   /api/v1/events
 PATCH  /api/v1/events/{id}
 DELETE /api/v1/events/{id}
 GET    /api/v1/organizer/events
+POST   /api/v1/organizer/events
 GET    /api/v1/events/{id}/seat-map
 WS     /api/v1/events/{id}/seat-map/stream
 GET    /api/v1/organizer/events/{id}/seat-map
@@ -105,7 +106,7 @@ GET    /api/v1/shared-tickets/{token}/qr
 POST   /api/v1/gate/validate
 ```
 
-Cadastro público sempre cria um `CUSTOMER`. Pesquisa no catálogo e mutações de eventos exigem um JWT de `ORGANIZER`; a listagem e o detalhe de eventos publicados são públicos. Na listagem, `q` pesquisa título, nome e endereço do local sem diferenciar maiúsculas de minúsculas; `date_from` e `date_to` aceitam instantes ISO 8601 com fuso; `available_only=true` remove eventos esgotados. A página `/events` oferece esses filtros e mantém a seleção na URL. Somente o `CUSTOMER` proprietário lista, acessa, cancela ou paga suas reservas e consulta ou compartilha seus ingressos. Apenas usuários `GATE` validam entradas.
+Cadastro público sempre cria um `CUSTOMER`. Pesquisa no catálogo e mutações de eventos exigem um JWT de `ORGANIZER`; a listagem e o detalhe de eventos publicados são públicos. O organizador pode importar um evento da Ticketmaster ou criar um evento próprio com imagem JPEG, PNG ou WebP de até 5 MB. As imagens ficam em `backend/uploads`, são servidas por `/uploads` e o Dockerfile reserva `/app/uploads` como volume persistente. Na listagem, `q` pesquisa título, nome e endereço do local sem diferenciar maiúsculas de minúsculas; `date_from` e `date_to` aceitam instantes ISO 8601 com fuso; `available_only=true` remove eventos esgotados. A página `/events` oferece esses filtros e mantém a seleção na URL. Somente o `CUSTOMER` proprietário lista, acessa, cancela ou paga suas reservas e consulta ou compartilha seus ingressos. Apenas usuários `GATE` validam entradas.
 
 O gateway de pagamento é simulado. O cartão de teste `4242 4242 4242 4242` é aprovado; números terminados em `0000` são recusados. O número é usado somente durante a chamada e não é persistido. Cada tentativa fica registrada. Depois de uma recusa, a reserva continua `PENDING` e pode ser retomada em "Minhas reservas" com outro cartão. O estoque permanece reservado até o pagamento ou cancelamento manual, e ingressos são emitidos somente após a aprovação. A resposta aprovada informa os IDs emitidos e o checkout abre diretamente o primeiro ingresso com seu QR; os demais permanecem em "Meus ingressos".
 
@@ -176,6 +177,7 @@ O uso de assistência por IA está descrito com transparência em [docs/ai-usage
 ## Trade-offs e limitações conhecidas
 
 - O Compose executa apenas o PostgreSQL; backend e frontend rodam localmente para agilizar o desenvolvimento.
+- O armazenamento de imagens usa o disco local no MVP. Em execução via contêiner, monte um volume persistente em `/app/uploads`; múltiplas instâncias exigirão armazenamento compartilhado, como S3 ou R2.
 - O token JWT é mantido em `localStorage` neste MVP. Isso simplifica o cliente, mas exige disciplina contra XSS; uma evolução para produção pode usar cookie `HttpOnly` com proteção CSRF ou um BFF.
 - Sem `TICKETMASTER_API_KEY`, o catálogo retorna um erro de configuração explícito; eventos locais publicados continuam disponíveis.
 - Pagamento e reembolso são deliberadamente simulados. Todas as tentativas de pagamento e o reembolso integral ficam registrados, mas nenhum dado de cartão é persistido. Reembolso parcial e processamento assíncrono por webhook permanecem fora do MVP.

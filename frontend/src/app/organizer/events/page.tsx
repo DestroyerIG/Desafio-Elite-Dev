@@ -73,7 +73,7 @@ export default function OrganizerEventsPage() {
         <div className="mt-8">
           <EmptyState
             title="Você ainda não publicou eventos"
-            description="Pesquise o catálogo Ticketmaster e publique o primeiro evento da sua agenda."
+            description="Crie seu próprio evento ou importe um evento da Ticketmaster."
           />
         </div>
       )}

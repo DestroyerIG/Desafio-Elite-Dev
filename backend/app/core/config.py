@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import AnyHttpUrl, Field, model_validator
@@ -41,6 +42,8 @@ class Settings(BaseSettings):
     ticketmaster_api_key: str | None = None
     ticketmaster_base_url: AnyHttpUrl = "https://app.ticketmaster.com/discovery/v2/"
     ticketmaster_timeout_seconds: float = Field(default=10, gt=0, le=30)
+    upload_directory: Path = Path(__file__).resolve().parents[2] / "uploads"
+    upload_max_bytes: int = Field(default=5 * 1024 * 1024, gt=0, le=20 * 1024 * 1024)
 
     @property
     def debug(self) -> bool:

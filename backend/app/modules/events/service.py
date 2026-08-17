@@ -16,7 +16,12 @@ from app.modules.events.repository import (
     list_organizer_events,
     list_published_events,
 )
-from app.modules.events.schemas import EventCreate, EventUpdate, PublicEventFilters
+from app.modules.events.schemas import (
+    CustomEventCreate,
+    EventCreate,
+    EventUpdate,
+    PublicEventFilters,
+)
 
 
 async def get_public_events(
@@ -86,6 +91,40 @@ async def publish_external_event(
     return event
 
 
+async def create_custom_event(
+    session: AsyncSession,
+    organizer: User,
+    data: CustomEventCreate,
+    image_url: str | None,
+) -> Event:
+    event = Event(
+        organizer_id=organizer.id,
+        external_provider=None,
+        external_id=None,
+        title=data.title,
+        description=data.description,
+        image_url=image_url,
+        venue_name=data.venue_name,
+        venue_address=data.venue_address,
+        event_date=data.event_date,
+        capacity=data.capacity,
+        available_tickets=data.capacity,
+        ticket_price=data.ticket_price,
+        status=EventStatus.PUBLISHED,
+    )
+    try:
+        await add_event(session, event)
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise AppError(
+            "EVENT_CREATION_FAILED",
+            "Não foi possível criar o evento.",
+            409,
+        ) from exc
+    return event
+
+
 async def update_organizer_event(
     session: AsyncSession,
     organizer: User,
@@ -127,11 +166,12 @@ async def update_organizer_event(
 
 async def delete_organizer_event(
     session: AsyncSession, organizer: User, event_id: UUID
-) -> None:
+) -> str | None:
     event = await get_organizer_event(session, event_id, organizer.id)
     if event is None:
         raise AppError("EVENT_NOT_FOUND", "Evento não encontrado.", 404)
 
+    image_url = event.image_url
     try:
         await session.delete(event)
         await session.commit()
@@ -142,3 +182,4 @@ async def delete_organizer_event(
             "Eventos com reservas não podem ser removidos.",
             409,
         ) from exc
+    return image_url

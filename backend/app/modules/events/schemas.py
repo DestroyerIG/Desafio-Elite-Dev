@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -22,6 +22,37 @@ class EventCreate(BaseModel):
     )
     capacity: int = Field(gt=0, le=1_000_000)
     ticket_price: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
+
+
+class CustomEventCreate(BaseModel):
+    title: str = Field(min_length=2, max_length=255)
+    description: str | None = Field(default=None, max_length=10_000)
+    venue_name: str = Field(min_length=2, max_length=255)
+    venue_address: str = Field(min_length=2, max_length=2_000)
+    event_date: datetime
+    capacity: int = Field(gt=0, le=1_000_000)
+    ticket_price: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
+
+    @field_validator("title", "venue_name", "venue_address", mode="before")
+    @classmethod
+    def normalize_required_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def normalize_description(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    @field_validator("event_date")
+    @classmethod
+    def validate_future_event_date(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("event_date must include a timezone")
+        if value <= datetime.now(UTC):
+            raise ValueError("event_date must be in the future")
+        return value
 
 
 class PublicEventFilters(BaseModel):
@@ -85,8 +116,8 @@ class EventResponse(BaseModel):
 
     id: UUID
     organizer_id: UUID
-    external_provider: str
-    external_id: str
+    external_provider: str | None
+    external_id: str | None
     title: str
     description: str | None
     image_url: str | None

@@ -19,8 +19,8 @@ export type SeatingMode = "GENERAL_ADMISSION" | "ASSIGNED";
 export interface Event {
   id: string;
   organizer_id: string;
-  external_provider: string;
-  external_id: string;
+  external_provider: string | null;
+  external_id: string | null;
   title: string;
   description: string | null;
   image_url: string | null;

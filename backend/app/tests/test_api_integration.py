@@ -1,12 +1,15 @@
 import asyncio
 import os
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from PIL import Image
 from sqlalchemy import func, select
 
+from app.core.config import get_settings
 from app.core.security import create_ticket_token, hash_opaque_token
 from app.database.session import async_session_factory, engine
 from app.integrations.ticketmaster.client import get_ticketmaster_client
@@ -208,6 +211,81 @@ async def test_auth_catalog_and_event_flow() -> None:
             )
             assert delete_response.status_code == 204
     finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_organizer_creates_custom_event_with_uploaded_image() -> None:
+    uploaded_file = None
+    buffer = BytesIO()
+    Image.new("RGB", (16, 9), color=(37, 99, 235)).save(buffer, format="PNG")
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            organizer_login = await client.post(
+                "/api/v1/auth/login",
+                json={
+                    "email": "organizer@example.com",
+                    "password": "DevOnly123!",
+                },
+            )
+            assert organizer_login.status_code == 200
+            organizer_headers = {
+                "Authorization": f"Bearer {organizer_login.json()['access_token']}"
+            }
+
+            event_date = datetime.now(UTC) + timedelta(days=30)
+            create_response = await client.post(
+                "/api/v1/organizer/events",
+                headers=organizer_headers,
+                data={
+                    "title": "Evento criado pelo organizador",
+                    "description": "Publicado sem depender de catálogo externo.",
+                    "venue_name": "Espaço Independente",
+                    "venue_address": "Rua da Plataforma, 100",
+                    "event_date": event_date.isoformat(),
+                    "capacity": "120",
+                    "ticket_price": "42.50",
+                },
+                files={"image": ("cartaz.png", buffer.getvalue(), "image/png")},
+            )
+
+            assert create_response.status_code == 201
+            created_event = create_response.json()
+            assert created_event["external_provider"] is None
+            assert created_event["external_id"] is None
+            assert created_event["status"] == "PUBLISHED"
+            assert created_event["available_tickets"] == 120
+            assert created_event["image_url"].startswith("/uploads/events/")
+
+            uploaded_file = (
+                get_settings().upload_directory
+                / "events"
+                / created_event["image_url"].rsplit("/", 1)[-1]
+            )
+            assert uploaded_file.exists()
+
+            image_response = await client.get(created_event["image_url"])
+            public_response = await client.get(
+                f"/api/v1/events/{created_event['id']}"
+            )
+            assert image_response.status_code == 200
+            assert image_response.headers["content-type"] == "image/png"
+            assert public_response.status_code == 200
+
+            delete_response = await client.delete(
+                f"/api/v1/events/{created_event['id']}",
+                headers=organizer_headers,
+            )
+            assert delete_response.status_code == 204
+            assert not uploaded_file.exists()
+    finally:
+        if uploaded_file is not None:
+            uploaded_file.unlink(missing_ok=True)
         app.dependency_overrides.clear()
         await engine.dispose()
 

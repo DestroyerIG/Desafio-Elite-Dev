@@ -26,10 +26,10 @@ export default function Home() {
           <div className="self-end rounded-lg border border-slate-200 bg-slate-50 p-6">
             <p className="text-sm font-medium text-slate-500">Para organizadores</p>
             <h2 className="mt-2 text-xl font-semibold text-slate-950">
-              Publique a partir do catálogo Ticketmaster
+              Crie seu evento ou importe da Ticketmaster
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Entre com uma conta de organizador para pesquisar o catálogo e definir capacidade e preço.
+              Cadastre todos os detalhes e a imagem ou aproveite os dados disponíveis no catálogo.
             </p>
             <Link
               href="/login"

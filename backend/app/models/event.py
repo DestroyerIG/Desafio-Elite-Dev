@@ -24,6 +24,11 @@ class Event(TimestampMixin, Base):
         CheckConstraint("available_tickets >= 0", name="available_tickets_non_negative"),
         CheckConstraint("available_tickets <= capacity", name="available_tickets_within_capacity"),
         CheckConstraint("ticket_price >= 0", name="ticket_price_non_negative"),
+        CheckConstraint(
+            "(external_provider IS NULL AND external_id IS NULL) OR "
+            "(external_provider IS NOT NULL AND external_id IS NOT NULL)",
+            name="external_reference_complete",
+        ),
         UniqueConstraint(
             "organizer_id",
             "external_provider",
@@ -36,8 +41,8 @@ class Event(TimestampMixin, Base):
     organizer_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), index=True, nullable=False
     )
-    external_provider: Mapped[str] = mapped_column(String(50), nullable=False)
-    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_provider: Mapped[str | None] = mapped_column(String(50))
+    external_id: Mapped[str | None] = mapped_column(String(255))
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     image_url: Mapped[str | None] = mapped_column(Text)
