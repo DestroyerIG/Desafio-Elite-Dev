@@ -1,3 +1,12 @@
+x-backend-environment: &backend-environment
+  DATABASE_URL: postgresql+asyncpg://elite:elite@db:5432/elite
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  UPLOAD_DIRECTORY: /app/uploads
+
+x-backend-env-file: &backend-env-file
+  - path: ./backend/.env
+    required: false
+
 services:
   db:
     image: postgres:16-alpine
@@ -6,7 +15,7 @@ services:
       POSTGRES_USER: elite
       POSTGRES_PASSWORD: elite
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -14,6 +23,76 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ./backend
+      target: runtime
+    env_file: *backend-env-file
+    environment: *backend-environment
+    command: ["sh", "-c", "alembic upgrade head && python -m app.database.seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+    env_file: *backend-env-file
+    environment: *backend-environment
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - event_uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    init: true
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        INTERNAL_API_URL: http://backend:8000
+    environment:
+      INTERNAL_API_URL: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    init: true
+    restart: unless-stopped
 
   db_test:
     image: postgres:16-alpine
@@ -34,3 +113,4 @@ services:
 
 volumes:
   postgres_data:
+  event_uploads:

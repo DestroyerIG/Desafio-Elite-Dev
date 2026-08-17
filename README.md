@@ -23,7 +23,7 @@ Detalhes estão em [docs/architecture.md](docs/architecture.md).
 - Frontend: Next.js, React, TypeScript, Tailwind CSS, TanStack Query, Zod e jsQR.
 - Backend: Python, FastAPI, Pydantic, SQLAlchemy 2, Alembic, HTTPX, PyJWT, qrcode e Argon2.
 - Banco: PostgreSQL 16.
-- Ambiente local: Docker Compose para o banco.
+- Ambiente local: Docker Compose para PostgreSQL, migrações, backend e frontend.
 
 ## Decisões técnicas
 
@@ -31,15 +31,54 @@ As decisões arquiteturais e seus trade-offs estão em [docs/decisions.md](docs/
 
 ## Como executar
 
+### Aplicação completa com Docker Compose
+
+Pré-requisito: Docker Desktop com o mecanismo Linux em execução.
+
+Na primeira execução, prepare o ambiente do backend. O arquivo é opcional para o Compose, mas é nele que deve ficar a chave da Ticketmaster e os segredos locais:
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+```
+
+Depois, construa e inicie toda a aplicação:
+
+```powershell
+docker compose up -d --build --wait
+docker compose ps
+```
+
+O Compose espera o PostgreSQL ficar saudável, executa todas as migrations e o seed uma única vez, inicia o backend e somente então libera o frontend.
+
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8000`
+- Saúde da API: `http://localhost:8000/health`
+- OpenAPI: `http://localhost:8000/docs`
+
+A resposta `{"detail":"Not Found"}` em `http://localhost:8000/` é esperada, pois a API não possui uma rota raiz. Use `/health` ou `/docs`.
+
+Para acompanhar ou encerrar:
+
+```powershell
+docker compose logs -f backend frontend
+docker compose down
+```
+
+Os dados do PostgreSQL e as imagens enviadas persistem nos volumes `postgres_data` e `event_uploads`. Use `docker compose down -v` somente quando quiser apagar esses dados.
+
+Se alterar as portas públicas, copie também `.env.example` para `.env`, ajuste os endereços e reconstrua o frontend, pois `NEXT_PUBLIC_API_URL` é incorporada durante o build.
+
+### Execução manual opcional
+
 Pré-requisitos: Docker, Python 3.12+ e Node.js 20.9+.
 
-### Banco de dados
+#### Banco de dados
 
 ```powershell
 docker compose up -d db
 ```
 
-### Backend
+#### Backend
 
 ```powershell
 cd backend
@@ -54,7 +93,7 @@ uvicorn app.main:app --reload
 
 A API estará em `http://localhost:8000`; `GET /health` verifica também a conexão com o PostgreSQL. A documentação OpenAPI fica em `http://localhost:8000/docs`.
 
-### Frontend
+#### Frontend
 
 ```powershell
 cd frontend
@@ -176,7 +215,7 @@ O uso de assistência por IA está descrito com transparência em [docs/ai-usage
 
 ## Trade-offs e limitações conhecidas
 
-- O Compose executa apenas o PostgreSQL; backend e frontend rodam localmente para agilizar o desenvolvimento.
+- O Compose local executa a aplicação completa em imagens de produção. O desenvolvimento manual com hot reload permanece disponível e costuma ser mais rápido no Windows.
 - O armazenamento de imagens usa o disco local no MVP. Em execução via contêiner, monte um volume persistente em `/app/uploads`; múltiplas instâncias exigirão armazenamento compartilhado, como S3 ou R2.
 - O token JWT é mantido em `localStorage` neste MVP. Isso simplifica o cliente, mas exige disciplina contra XSS; uma evolução para produção pode usar cookie `HttpOnly` com proteção CSRF ou um BFF.
 - Sem `TICKETMASTER_API_KEY`, o catálogo retorna um erro de configuração explícito; eventos locais publicados continuam disponíveis.

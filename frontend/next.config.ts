@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
 
-const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const publicApiUrl = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+).replace(/\/$/, "");
+const internalApiUrl = (process.env.INTERNAL_API_URL ?? publicApiUrl).replace(
+  /\/$/,
+  "",
+);
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   images: {
     remotePatterns: [
       {
@@ -16,7 +23,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/uploads/:path*",
-        destination: `${apiUrl}/uploads/:path*`,
+        destination: `${internalApiUrl}/uploads/:path*`,
       },
     ];
   },
