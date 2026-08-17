@@ -53,7 +53,7 @@ export default function Home() {
             Ver agenda completa
           </Link>
         </div>
-        <EventList limit={3} />
+        <EventList carousel />
       </section>
     </main>
   );

@@ -19,7 +19,8 @@ from app.modules.reservations.repository import (
     get_published_event_for_update,
 )
 from app.modules.seats.repository import (
-    count_event_reservations,
+    count_blocking_event_reservations,
+    count_event_seat_assignments,
     get_active_assignments_for_update,
     get_active_reservation_seats_for_update,
     get_due_reservations_for_update,
@@ -64,13 +65,6 @@ async def configure_seat_map(
         event = await get_organizer_event(session, event_id, organizer.id)
         if event is None:
             raise AppError("EVENT_NOT_FOUND", "Evento não encontrado.", 404)
-        if await count_event_reservations(session, event.id):
-            raise AppError(
-                "SEAT_MAP_LOCKED",
-                "O mapa não pode ser alterado depois da primeira reserva.",
-                409,
-            )
-
         total_seats = sum(
             section.row_count * section.seats_per_row for section in data.sections
         )
@@ -82,6 +76,23 @@ async def configure_seat_map(
             )
 
         existing_map = await get_event_seat_map(session, event.id, for_update=True)
+        if existing_map is not None:
+            if await count_event_seat_assignments(session, event.id):
+                raise AppError(
+                    "SEAT_MAP_LOCKED",
+                    "O mapa não pode ser alterado depois da primeira reserva de assento.",
+                    409,
+                )
+        elif (
+            event.available_tickets != event.capacity
+            or await count_blocking_event_reservations(session, event.id)
+        ):
+            raise AppError(
+                "SEAT_MAP_ACTIVE_RESERVATIONS",
+                "Cancele ou conclua as reservas ativas antes de criar o mapa.",
+                409,
+            )
+
         if existing_map is not None:
             await session.delete(existing_map)
             await session.flush()
@@ -156,10 +167,10 @@ async def remove_seat_map(
         event = await get_organizer_event(session, event_id, organizer.id)
         if event is None:
             raise AppError("EVENT_NOT_FOUND", "Evento não encontrado.", 404)
-        if await count_event_reservations(session, event.id):
+        if await count_event_seat_assignments(session, event.id):
             raise AppError(
                 "SEAT_MAP_LOCKED",
-                "O mapa não pode ser removido depois da primeira reserva.",
+                "O mapa não pode ser removido depois da primeira reserva de assento.",
                 409,
             )
         seat_map = await get_event_seat_map(session, event.id, for_update=True)

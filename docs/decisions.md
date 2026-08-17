@@ -76,7 +76,7 @@ O estado oficial continua no PostgreSQL. `LISTEN/NOTIFY` transporta apenas `even
 
 ## Reserva atômica de assentos
 
-Eventos podem ser `GENERAL_ADMISSION` ou `ASSIGNED`. No segundo modo, o organizador gera setores retangulares cujo total deve ser igual à capacidade. A estrutura fica imutável depois da primeira reserva para preservar referências históricas.
+Eventos podem ser `GENERAL_ADMISSION` ou `ASSIGNED`. No segundo modo, o organizador gera setores retangulares cujo total deve ser igual à capacidade. Reservas gerais encerradas não bloqueiam a primeira configuração se o estoque estiver integralmente restaurado. Depois do primeiro vínculo em `reservation_seats`, a estrutura fica imutável para preservar referências históricas.
 
 A seleção aceita até 10 lugares e bloqueia a linha do evento antes dos assentos ordenados por UUID. Todos precisam estar `AVAILABLE`; caso contrário a transação retorna `409` sem criar reserva parcial. Além dos estados `AVAILABLE`, `HELD` e `SOLD`, um índice parcial único em `reservation_seats.seat_id WHERE released_at IS NULL` protege a exclusividade ativa também no banco.
 

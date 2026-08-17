@@ -33,9 +33,27 @@ async def get_event_seat_map(
     return await session.scalar(query)
 
 
-async def count_event_reservations(session: AsyncSession, event_id: UUID) -> int:
+async def count_blocking_event_reservations(
+    session: AsyncSession, event_id: UUID
+) -> int:
     count = await session.scalar(
-        select(func.count(Reservation.id)).where(Reservation.event_id == event_id)
+        select(func.count(Reservation.id)).where(
+            Reservation.event_id == event_id,
+            Reservation.status.in_(
+                (ReservationStatus.PENDING, ReservationStatus.PAID)
+            ),
+        )
+    )
+    return int(count or 0)
+
+
+async def count_event_seat_assignments(
+    session: AsyncSession, event_id: UUID
+) -> int:
+    count = await session.scalar(
+        select(func.count(ReservationSeat.id))
+        .join(EventSeat, EventSeat.id == ReservationSeat.seat_id)
+        .where(EventSeat.event_id == event_id)
     )
     return int(count or 0)
 

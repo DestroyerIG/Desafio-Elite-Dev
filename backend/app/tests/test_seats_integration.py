@@ -75,6 +75,79 @@ async def test_postgres_notification_reaches_realtime_hub() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cancelled_general_reservation_allows_first_seat_map() -> None:
+    app.dependency_overrides[get_ticketmaster_client] = (
+        fake_seat_catalog_dependency
+    )
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            organizer_headers, customer_headers = await asyncio.gather(
+                login(client, "organizer@example.com"),
+                login(client, "customer1@example.com"),
+            )
+            event_response = await client.post(
+                "/api/v1/events",
+                headers=organizer_headers,
+                json={
+                    "external_id": f"cancel-before-map-{uuid4().hex}",
+                    "capacity": 1,
+                    "ticket_price": "50.00",
+                },
+            )
+            assert event_response.status_code == 201
+            event_id = event_response.json()["id"]
+
+            reservation = await client.post(
+                f"/api/v1/events/{event_id}/reservations",
+                headers=customer_headers,
+                json={"quantity": 1},
+            )
+            assert reservation.status_code == 201
+            map_data = {
+                "stage_label": "Palco",
+                "sections": [
+                    {"name": "Setor único", "row_count": 1, "seats_per_row": 1}
+                ],
+            }
+
+            blocked_map = await client.put(
+                f"/api/v1/organizer/events/{event_id}/seat-map",
+                headers=organizer_headers,
+                json=map_data,
+            )
+            assert blocked_map.status_code == 409
+            assert (
+                blocked_map.json()["error"]["code"]
+                == "SEAT_MAP_ACTIVE_RESERVATIONS"
+            )
+
+            cancellation = await client.post(
+                f"/api/v1/reservations/{reservation.json()['id']}/cancel",
+                headers=customer_headers,
+            )
+            assert cancellation.status_code == 200
+            assert cancellation.json()["status"] == "CANCELLED"
+
+            configured_map = await client.put(
+                f"/api/v1/organizer/events/{event_id}/seat-map",
+                headers=organizer_headers,
+                json=map_data,
+            )
+            assert configured_map.status_code == 200
+            assert configured_map.json()["sections"][0]["seats"][0]["label"] == "A1"
+
+            updated_event = await client.get(f"/api/v1/events/{event_id}")
+            assert updated_event.json()["seating_mode"] == "ASSIGNED"
+            assert updated_event.json()["available_tickets"] == 1
+    finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_assigned_seat_lifecycle_is_atomic_and_returns_stock() -> None:
     app.dependency_overrides[get_ticketmaster_client] = (
         fake_seat_catalog_dependency

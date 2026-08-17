@@ -12,6 +12,31 @@ import { loginSchema } from "@/schemas/auth";
 import { ApiError } from "@/services/api";
 import type { User } from "@/types/api";
 
+const developmentAccounts = [
+  {
+    role: "Organizador",
+    description: "Publicação e gestão de eventos",
+    email: "organizer@example.com",
+  },
+  {
+    role: "Cliente 1",
+    description: "Reservas, pagamentos e ingressos",
+    email: "customer1@example.com",
+  },
+  {
+    role: "Cliente 2",
+    description: "Testes de concorrência entre clientes",
+    email: "customer2@example.com",
+  },
+  {
+    role: "Portaria",
+    description: "Leitura e validação de ingressos",
+    email: "gate@example.com",
+  },
+] as const;
+
+const developmentPassword = "DevOnly123!";
+
 function destinationFor(user: User) {
   if (user.role === "ORGANIZER") return "/organizer/dashboard";
   if (user.role === "GATE") return "/gate";
@@ -63,6 +88,12 @@ export default function LoginPage() {
     }
   }
 
+  function selectDevelopmentAccount(emailAddress: string) {
+    setEmail(emailAddress);
+    setPassword(developmentPassword);
+    setError(null);
+  }
+
   return (
     <main className="mx-auto grid max-w-5xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[1fr_22rem] lg:py-20">
       <section className="self-center">
@@ -75,17 +106,67 @@ export default function LoginPage() {
           clientes seguem para os eventos.
         </p>
 
-        <div className="mt-8 rounded-lg border border-slate-200 bg-white p-5 text-sm">
-          <p className="font-semibold text-slate-900">Credenciais de desenvolvimento</p>
-          <dl className="mt-3 grid gap-2 text-slate-600 sm:grid-cols-[8rem_1fr]">
-            <dt>Organizador</dt>
-            <dd className="font-mono text-xs">organizer@example.com</dd>
-            <dt>Cliente</dt>
-            <dd className="font-mono text-xs">customer1@example.com</dd>
-            <dt>Senha</dt>
-            <dd className="font-mono text-xs">DevOnly123!</dd>
-          </dl>
-        </div>
+        {process.env.NODE_ENV === "development" && (
+          <section
+            className="mt-8 rounded-xl border border-blue-200 bg-blue-50/60 p-5"
+            aria-labelledby="development-accounts-title"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2
+                  id="development-accounts-title"
+                  className="font-semibold text-slate-950"
+                >
+                  Acessos de desenvolvimento
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Escolha um perfil para preencher o formulário automaticamente.
+                </p>
+              </div>
+              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                Somente ambiente local
+              </span>
+            </div>
+
+            <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+              {developmentAccounts.map((account) => (
+                <li
+                  key={account.email}
+                  className="rounded-lg border border-blue-100 bg-white p-4"
+                >
+                  <p className="font-semibold text-slate-950">{account.role}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {account.description}
+                  </p>
+                  <dl className="mt-3 space-y-1 text-xs">
+                    <div>
+                      <dt className="sr-only">E-mail</dt>
+                      <dd className="break-all font-mono text-slate-700">
+                        {account.email}
+                      </dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="text-slate-500">Senha:</dt>
+                      <dd className="font-mono font-semibold text-slate-700">
+                        {developmentPassword}
+                      </dd>
+                    </div>
+                  </dl>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 w-full"
+                    onClick={() => selectDevelopmentAccount(account.email)}
+                    disabled={isSubmitting || authIsLoading}
+                  >
+                    Usar este acesso
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </section>
 
       <form
