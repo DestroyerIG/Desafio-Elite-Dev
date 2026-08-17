@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 class AppError(Exception):
@@ -32,4 +33,22 @@ async def validation_error_handler(
                 "message": "Os dados enviados são inválidos.",
             }
         },
+    )
+
+
+async def http_exception_handler(
+    _request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
+    error_codes = {
+        404: ("NOT_FOUND", "Recurso não encontrado."),
+        405: ("METHOD_NOT_ALLOWED", "Método não permitido."),
+    }
+    code, message = error_codes.get(
+        exc.status_code,
+        ("HTTP_ERROR", "Não foi possível concluir a solicitação."),
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": code, "message": message}},
+        headers=exc.headers,
     )

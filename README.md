@@ -151,7 +151,15 @@ python -m pip install -r requirements-dev.txt
 pytest -q
 ```
 
-O teste ponta a ponta do backend é opt-in porque cria dados em um PostgreSQL isolado. Aponte `DATABASE_URL` para essa base, execute migration e seed, defina `RUN_INTEGRATION_TESTS=1` e rode `pytest -q` novamente. Nunca use uma base com dados importantes. A suíte comprova busca e filtros públicos, reserva concorrente sem overselling, disputa pelo mesmo assento com um único vencedor, expiração de hold, pagamento recusado sem ingresso, nova tentativa aprovada na mesma reserva, pagamento concorrente sem duplicação, reembolso concorrente idempotente, prazos de elegibilidade, devolução exata ao estoque e aos assentos, invalidação de QR e compartilhamento, bloqueio após check-in, emissão exata e validação concorrente sem dupla entrada.
+A suíte integrada possui um PostgreSQL próprio e um executor protegido:
+
+```powershell
+docker compose --profile test up -d --wait db_test
+cd backend
+python scripts/run_integration_tests.py
+```
+
+O executor recusa bancos cujo nome não contenha `test`, recria o schema, aplica migrations e seed e então executa os cenários concorrentes. A suíte comprova busca e filtros públicos, reserva concorrente sem overselling, disputa pelo mesmo assento com um único vencedor, expiração de hold, pagamento recusado sem ingresso, nova tentativa aprovada na mesma reserva, pagamento concorrente sem duplicação, reembolso concorrente idempotente, prazos de elegibilidade, devolução exata ao estoque e aos assentos, invalidação de QR e compartilhamento, bloqueio após check-in, emissão exata e validação concorrente sem dupla entrada. A matriz completa está em [docs/testing.md](docs/testing.md).
 
 No frontend:
 
