@@ -110,22 +110,44 @@ def test_shared_ticket_token_is_redacted_from_access_log() -> None:
     assert record.args[2] == "/api/v1/shared-tickets/[REDACTED]/qr"
 
 
-def test_asyncpg_url_normalizes_sslmode_from_managed_providers() -> None:
-    """A URL publicada por Neon/Supabase precisa funcionar sem edição manual.
+def test_asyncpg_url_accepts_neon_connection_string() -> None:
+    """A URL publicada pelo Neon precisa funcionar sem edição manual.
 
-    O asyncpg recusa `sslmode`, a grafia do libpq, com TypeError na conexão.
+    O SQLAlchemy repassa a query string como argumento nomeado para
+    asyncpg.connect(), que recusa a grafia do libpq com TypeError.
     """
     from app.core.config import Settings
 
     settings = Settings(
-        database_url="postgresql+asyncpg://u:p@host/db?sslmode=require",
+        database_url=(
+            "postgresql+asyncpg://u:p@ep-x.neon.tech/neondb"
+            "?sslmode=require&channel_binding=require"
+        ),
         environment="development",
     )
 
-    assert settings.database_url == "postgresql+asyncpg://u:p@host/db?ssl=require"
+    assert settings.database_url == (
+        "postgresql+asyncpg://u:p@ep-x.neon.tech/neondb?ssl=require"
+    )
 
 
-def test_asyncpg_url_without_sslmode_is_untouched() -> None:
+def test_asyncpg_url_drops_only_libpq_parameters() -> None:
+    """Parâmetros que o asyncpg entende continuam na URL."""
+    from app.core.config import Settings
+
+    settings = Settings(
+        database_url=(
+            "postgresql+asyncpg://u:p@host/db"
+            "?sslmode=verify-full&target_session_attrs=read-write&gssencmode=disable"
+        ),
+    )
+
+    assert "ssl=verify-full" in settings.database_url
+    assert "target_session_attrs=read-write" in settings.database_url
+    assert "gssencmode" not in settings.database_url
+
+
+def test_asyncpg_url_without_query_is_untouched() -> None:
     from app.core.config import Settings
 
     original = "postgresql+asyncpg://u:p@host/db"

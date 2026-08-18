@@ -48,23 +48,41 @@ class Settings(BaseSettings):
 
 
     @model_validator(mode="after")
-    def normalize_asyncpg_ssl(self) -> "Settings":
+    def normalize_asyncpg_dsn(self) -> "Settings":
         """Aceita a string de conexão que os provedores gerenciados entregam.
 
-        Neon, Supabase e Render publicam a URL com `?sslmode=require`, que é a
-        grafia do libpq. O asyncpg não conhece esse parâmetro e falha na conexão
-        com `TypeError: connect() got an unexpected keyword argument 'sslmode'` —
-        o primeiro erro de quem publica pela primeira vez. O equivalente aceito é
-        `ssl`, então a chave é renomeada preservando o valor.
+        Neon, Supabase e Render publicam a URL no dialeto do libpq, com
+        parâmetros como `sslmode=require&channel_binding=require`. O SQLAlchemy
+        repassa toda a query string como argumento nomeado para
+        `asyncpg.connect()`, que não conhece essa grafia e falha com
+        `TypeError: connect() got an unexpected keyword argument ...`.
+
+        `sslmode` tem equivalente direto em `ssl`, então é renomeado preservando
+        o valor. Os demais parâmetros só do libpq são descartados: mantê-los
+        quebraria a conexão, e nenhum deles altera o comportamento do asyncpg,
+        que negocia TLS pelo próprio `ssl`.
         """
-        if "+asyncpg" not in self.database_url or "sslmode" not in self.database_url:
+        if "+asyncpg" not in self.database_url:
             return self
 
         partes = urlsplit(self.database_url)
-        parametros = [
-            ("ssl" if chave == "sslmode" else chave, valor)
-            for chave, valor in parse_qsl(partes.query, keep_blank_values=True)
-        ]
+        if not partes.query:
+            return self
+
+        aceitos = {
+            "ssl",
+            "target_session_attrs",
+            "krbsrvname",
+            "gsslib",
+            "passfile",
+        }
+        parametros = []
+        for chave, valor in parse_qsl(partes.query, keep_blank_values=True):
+            if chave == "sslmode":
+                chave = "ssl"
+            if chave in aceitos:
+                parametros.append((chave, valor))
+
         self.database_url = urlunsplit(
             partes._replace(query=urlencode(parametros))
         )
