@@ -11,12 +11,12 @@ export function SiteHeader() {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-6 px-5 sm:px-8">
+      <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-5 py-3 sm:px-8">
         <Link href="/" className="text-lg font-semibold tracking-tight text-slate-950">
           Elite Events
         </Link>
 
-        <nav className="flex items-center gap-1" aria-label="Navegação principal">
+        <nav className="flex flex-wrap items-center gap-1" aria-label="Navegação principal">
           <Link href="/events" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
             Eventos
           </Link>
