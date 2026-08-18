@@ -22,7 +22,7 @@ import {
 } from "@/services/reservations";
 import type { Reservation } from "@/types/api";
 import { cn } from "@/utils/cn";
-import { formatCurrency, formatDate } from "@/utils/format";
+import { formatCurrency, formatDate, reservationStatusLabels } from "@/utils/format";
 
 export function Checkout({
   eventId,
@@ -271,7 +271,9 @@ export function Checkout({
             </div>
             <div>
               <dt className="font-medium text-slate-500">Status</dt>
-              <dd className="mt-1 font-semibold text-slate-900">{reservation.status}</dd>
+              <dd className="mt-1 font-semibold text-slate-900">
+                {reservationStatusLabels[reservation.status]}
+              </dd>
             </div>
             <div>
               <dt className="font-medium text-slate-500">Quantidade</dt>

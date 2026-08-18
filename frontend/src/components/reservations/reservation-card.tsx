@@ -2,18 +2,10 @@ import Link from "next/link";
 
 import { EventArtwork } from "@/components/events/event-artwork";
 import { Button, buttonVariants } from "@/components/ui/button";
-import type { CustomerReservation, ReservationStatus } from "@/types/api";
+import type { CustomerReservation } from "@/types/api";
 import { cn } from "@/utils/cn";
-import { formatCurrency, formatDate } from "@/utils/format";
+import { formatCurrency, formatDate, reservationStatusLabels } from "@/utils/format";
 
-
-const statusLabels: Record<ReservationStatus, string> = {
-  PENDING: "Aguardando pagamento",
-  PAID: "Pago",
-  REFUNDED: "Reembolsado",
-  CANCELLED: "Cancelado",
-  EXPIRED: "Expirado",
-};
 
 export function ReservationCard({
   reservation,
@@ -45,7 +37,7 @@ export function ReservationCard({
               {formatDate(reservation.event.event_date)}
             </p>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-              {statusLabels[reservation.status]}
+              {reservationStatusLabels[reservation.status]}
             </span>
           </div>
           <h2 className="mt-3 text-xl font-semibold text-slate-950">

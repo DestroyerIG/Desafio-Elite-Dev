@@ -1,3 +1,5 @@
+import type { ReservationStatus } from "@/types/api";
+
 export function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "long",
@@ -12,3 +14,12 @@ export function formatCurrency(value: string) {
   }).format(Number(value));
 }
 
+
+// Rótulos exibidos ao usuário. O enum da API nunca vai direto para a tela.
+export const reservationStatusLabels: Record<ReservationStatus, string> = {
+  PENDING: "Aguardando pagamento",
+  PAID: "Pago",
+  REFUNDED: "Reembolsado",
+  CANCELLED: "Cancelado",
+  EXPIRED: "Expirado",
+};

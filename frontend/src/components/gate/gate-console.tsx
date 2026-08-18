@@ -30,6 +30,15 @@ const resultLabels: Record<ValidationResult, string> = {
   WRONG_EVENT: "Evento incorreto",
 };
 
+// A linha superior do painel resume a decisão em uma palavra, legível de longe por
+// quem opera a portaria. Antes exibia o enum cru da API (`ALREADY_USED`).
+const resultEyebrows: Record<ValidationResult, string> = {
+  VALID: "Liberado",
+  INVALID: "Recusado",
+  ALREADY_USED: "Recusado",
+  WRONG_EVENT: "Recusado",
+};
+
 export function GateConsole() {
   const [eventId, setEventId] = useState("");
   const [credential, setCredential] = useState("");
@@ -183,7 +192,7 @@ export function GateConsole() {
           aria-live="assertive"
         >
           <p className="text-sm font-semibold uppercase tracking-wide">
-            {validationMutation.data.result}
+            {resultEyebrows[validationMutation.data.result]}
           </p>
           <h2 className="mt-2 text-2xl font-semibold">
             {resultLabels[validationMutation.data.result]}

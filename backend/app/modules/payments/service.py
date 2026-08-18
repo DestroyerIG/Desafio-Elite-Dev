@@ -7,6 +7,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError
+
+# O texto que o gateway devolve em `failure_reason` é persistido para auditoria, mas
+# nunca vira mensagem de usuário: um provedor real responderia códigos técnicos em
+# inglês, como "insufficient_funds". Ampliar a granularidade aqui exige tipar os
+# motivos no contrato do gateway e mapeá-los para português neste ponto.
+DECLINED_MESSAGE = (
+    "Pagamento recusado. Confira os dados do cartão ou tente outro meio de pagamento."
+)
+REFUND_REFUSED_MESSAGE = "O reembolso não pôde ser concluído. Tente novamente."
 from app.core.security import create_ticket_token, hash_ticket_token
 from app.models.enums import (
     EventStatus,
@@ -184,7 +193,7 @@ async def pay_reservation(
             await session.commit()
             raise AppError(
                 "PAYMENT_DECLINED",
-                result.failure_reason or "Pagamento recusado.",
+                DECLINED_MESSAGE,
                 402,
             )
 
@@ -340,7 +349,7 @@ async def refund_paid_reservation(
             await session.commit()
             raise AppError(
                 "REFUND_FAILED",
-                result.failure_reason or "O reembolso foi recusado pelo simulador.",
+                REFUND_REFUSED_MESSAGE,
                 409,
             )
         if result.status == RefundStatus.PENDING:

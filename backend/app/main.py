@@ -12,6 +12,7 @@ from app.core.exceptions import (
     AppError,
     app_error_handler,
     http_exception_handler,
+    unhandled_exception_handler,
     validation_error_handler,
 )
 from app.core.logging import configure_logging
@@ -41,9 +42,11 @@ def create_app() -> FastAPI:
     configure_logging(settings.environment)
     settings.upload_directory.mkdir(parents=True, exist_ok=True)
 
+    # `debug=True` faria o Starlette responder o traceback completo, com caminhos
+    # absolutos do disco, em vez de acionar o handler de erro. O rastro da falha vai
+    # para o log do servidor via `unhandled_exception_handler`; nunca pela rede.
     application = FastAPI(
         title=settings.app_name,
-        debug=settings.debug,
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -57,6 +60,7 @@ def create_app() -> FastAPI:
     application.add_exception_handler(AppError, app_error_handler)
     application.add_exception_handler(RequestValidationError, validation_error_handler)
     application.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    application.add_exception_handler(Exception, unhandled_exception_handler)
     application.include_router(health_router)
     application.include_router(auth_router)
     application.include_router(catalog_router)
