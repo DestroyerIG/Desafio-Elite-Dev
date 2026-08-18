@@ -108,3 +108,25 @@ def test_shared_ticket_token_is_redacted_from_access_log() -> None:
     SensitivePathFilter().filter(record)
 
     assert record.args[2] == "/api/v1/shared-tickets/[REDACTED]/qr"
+
+
+def test_asyncpg_url_normalizes_sslmode_from_managed_providers() -> None:
+    """A URL publicada por Neon/Supabase precisa funcionar sem edição manual.
+
+    O asyncpg recusa `sslmode`, a grafia do libpq, com TypeError na conexão.
+    """
+    from app.core.config import Settings
+
+    settings = Settings(
+        database_url="postgresql+asyncpg://u:p@host/db?sslmode=require",
+        environment="development",
+    )
+
+    assert settings.database_url == "postgresql+asyncpg://u:p@host/db?ssl=require"
+
+
+def test_asyncpg_url_without_sslmode_is_untouched() -> None:
+    from app.core.config import Settings
+
+    original = "postgresql+asyncpg://u:p@host/db"
+    assert Settings(database_url=original).database_url == original

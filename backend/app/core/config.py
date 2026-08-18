@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import AnyHttpUrl, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,9 +46,29 @@ class Settings(BaseSettings):
     upload_directory: Path = Path(__file__).resolve().parents[2] / "uploads"
     upload_max_bytes: int = Field(default=5 * 1024 * 1024, gt=0, le=20 * 1024 * 1024)
 
-    @property
-    def debug(self) -> bool:
-        return self.environment == "development"
+
+    @model_validator(mode="after")
+    def normalize_asyncpg_ssl(self) -> "Settings":
+        """Aceita a string de conexão que os provedores gerenciados entregam.
+
+        Neon, Supabase e Render publicam a URL com `?sslmode=require`, que é a
+        grafia do libpq. O asyncpg não conhece esse parâmetro e falha na conexão
+        com `TypeError: connect() got an unexpected keyword argument 'sslmode'` —
+        o primeiro erro de quem publica pela primeira vez. O equivalente aceito é
+        `ssl`, então a chave é renomeada preservando o valor.
+        """
+        if "+asyncpg" not in self.database_url or "sslmode" not in self.database_url:
+            return self
+
+        partes = urlsplit(self.database_url)
+        parametros = [
+            ("ssl" if chave == "sslmode" else chave, valor)
+            for chave, valor in parse_qsl(partes.query, keep_blank_values=True)
+        ]
+        self.database_url = urlunsplit(
+            partes._replace(query=urlencode(parametros))
+        )
+        return self
 
     @model_validator(mode="after")
     def reject_development_secret_in_production(self) -> "Settings":
