@@ -24,4 +24,7 @@ USER elite
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Plataformas gerenciadas (Render, Container Apps, Cloud Run) injetam a porta em
+# $PORT e esperam que o processo escute nela. O padrão 8000 preserva o Compose
+# local, onde a variável não existe.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -1,0 +1,53 @@
+# Blueprint do Render para o backend.
+#
+# Descrever o serviço aqui elimina a ambiguidade dos campos do painel: em um
+# Blueprint, `dockerfilePath` e `dockerContext` são sempre relativos à raiz do
+# repositório, sem depender de como o Root Directory é interpretado.
+#
+# Para usar: New > Blueprint, aponte para o repositório e informe os valores das
+# variáveis marcadas com `sync: false`.
+#
+# O banco fica no Neon (fora deste arquivo) para não consumir a instância de
+# PostgreSQL do plano gratuito, que expira em 30 dias.
+
+services:
+  - type: web
+    name: elite-events-api
+    runtime: docker
+    plan: free
+    # Use a região mais próxima do projeto no Neon; latência de banco entra em
+    # toda requisição.
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+
+      # Definidas no painel. `sync: false` mantém segredo fora do repositório.
+      # DATABASE_URL precisa do esquema `postgresql+asyncpg://`; o `sslmode` da
+      # string do Neon é normalizado pela aplicação.
+      - key: DATABASE_URL
+        sync: false
+
+      # Precisam de 32 caracteres ou mais, e valores diferentes entre si: girar o
+      # de sessão só obriga um novo login, girar o de ingresso invalida QRs já
+      # distribuídos.
+      - key: JWT_SECRET
+        sync: false
+      - key: TICKET_SECRET
+        sync: false
+
+      # URL da Vercel, sem barra final. É a única origem que o CORS libera.
+      - key: FRONTEND_URL
+        sync: false
+
+      # Opcional: sem a chave, o catálogo responde erro explícito e os eventos
+      # já publicados continuam funcionando.
+      - key: TICKETMASTER_API_KEY
+        sync: false
+
+      # Só é lida ao rodar o seed.
+      - key: SEED_PASSWORD
+        sync: false
