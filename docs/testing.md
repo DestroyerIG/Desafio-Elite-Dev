@@ -26,7 +26,15 @@ python scripts/run_integration_tests.py
 O executor verifica se o nome do banco contém `test`, recria o schema, aplica todas as migrations,
 executa o seed e roda somente os testes marcados como `integration`. O mesmo bloqueio existe no
 Pytest: definir `RUN_INTEGRATION_TESTS=1` apontando para uma base comum encerra a execução antes do
-primeiro teste.
+primeiro teste. A verificação do nome acontece antes de qualquer conexão, porque o reset é
+destrutivo.
+
+O reset descarta e recria o schema `public` em vez de usar `alembic downgrade base`. O downgrade da
+migration `20260816_0002` recria a constraint única de `payments.reservation_id`, e os próprios
+cenários integrados registram várias tentativas de pagamento na mesma reserva — com dados residuais
+o downgrade falharia e a suíte só rodaria em uma base recém-criada. Descartar o schema remove
+tabelas, dados e `alembic_version` de uma vez, então execuções consecutivas no mesmo contêiner são
+reproduzíveis.
 
 Para usar outra base isolada:
 
