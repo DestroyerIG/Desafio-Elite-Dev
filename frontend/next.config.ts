@@ -9,7 +9,11 @@ const internalApiUrl = (process.env.INTERNAL_API_URL ?? publicApiUrl).replace(
 );
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // O modo standalone existe para a imagem Docker, que copia `.next/standalone`
+  // e executa `server.js`. Na Vercel ele quebra o build: o rastreamento de
+  // arquivos vai para dentro de `standalone/` em vez de emitir os `.nft.json` na
+  // raiz de `.next`, que é onde a plataforma os procura ao montar as funções.
+  output: process.env.VERCEL ? undefined : "standalone",
   images: {
     remotePatterns: [
       {
