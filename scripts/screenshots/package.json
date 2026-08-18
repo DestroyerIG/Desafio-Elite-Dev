@@ -1,0 +1,14 @@
+{
+  "name": "elite-events-screenshots",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Captura as telas de erro da aplicação em execução. Isolado do frontend para não entrar no npm ci da imagem Docker.",
+  "type": "module",
+  "scripts": {
+    "capturar": "node capturar-erros.mjs",
+    "capturar-fluxo": "node capturar-fluxo.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}
