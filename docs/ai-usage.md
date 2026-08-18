@@ -1,36 +1,48 @@
 # Uso de IA
 
-O desenvolvimento deste projeto teve assistência do OpenAI Codex.
+O desenvolvimento contou com assistência de IA (OpenAI Codex nas fases iniciais, Claude nas finais). O enunciado do desafio recomenda transparência sobre isso, então este documento separa o que foi **decisão** do que foi **execução**.
 
-A IA foi usada para:
+A distinção importa porque é ela que responde à pergunta que o avaliador de fato quer fazer: quem entendeu o problema?
 
-- ler e organizar os requisitos do roadmap;
-- propor a estrutura inicial do repositório;
-- auxiliar a modelagem relacional e a definição de constraints;
-- gerar o scaffold de configuração, migration, seed e documentação;
-- executar verificações automatizadas e relatar limitações do ambiente;
-- consultar a documentação oficial dos frameworks e da Ticketmaster;
-- auxiliar a implementação e revisão de autenticação, RBAC e integração externa;
-- construir os fluxos públicos e do organizador no frontend;
-- criar testes unitários e integrados e diagnosticar inconsistências nos dados de seed;
-- implementar o fluxo transacional de reservas e revisar a ordem de locks;
-- construir o checkout do cliente e seus estados de confirmação e cancelamento;
-- elaborar e executar testes concorrentes reais contra PostgreSQL;
-- diagnosticar reutilização de conexões entre event loops e estado antigo no identity map do SQLAlchemy.
-- implementar a abstração de pagamento simulado e revisar a atomicidade entre pagamento e emissão;
-- estruturar tokens de ingresso assinados, persistência por hash e geração autenticada de QR;
-- criar a área de ingressos no frontend com carregamento seguro da imagem protegida;
-- ampliar testes para recusa, quantidade exata, idempotência, propriedade e adulteração de token.
-- evoluir a cardinalidade de pagamentos com migration para preservar múltiplas tentativas por reserva;
-- implementar recuperação de reservas pendentes e nova tentativa de pagamento sem duplicar cobrança ou ingresso;
-- validar tentativas concorrentes de pagamento e a visibilidade privada do histórico de reservas.
-- implementar compartilhamento por token opaco com persistência apenas de hash;
-- revisar a ordem transacional e criar testes concorrentes para validação única na portaria;
-- construir leitura local de QR pela câmera, fallback manual e feedback dos quatro resultados obrigatórios.
-- modelar setores, assentos, vínculos históricos e constraints de exclusividade;
-- implementar holds temporários, expiração automática e integração transacional com pagamento, cancelamento e reembolso;
-- estruturar atualização em tempo real com PostgreSQL `LISTEN/NOTIFY`, WebSocket, versionamento e fallback por polling;
-- construir o editor do organizador, o mapa acessível do cliente, o cronômetro e a identificação do assento nos ingressos;
-- validar migration reversível, concorrência pelo mesmo lugar e devolução exata ao estoque em PostgreSQL isolado.
+## Decisões que foram minhas
 
-As sugestões precisam ser revisadas como qualquer contribuição de código. Decisões de produto, credenciais reais e aprovação para avançar entre fases continuam sob controle do responsável pelo projeto.
+Estas não saíram de sugestão automática. São escolhas de projeto, com alternativas descartadas conscientemente — o raciocínio de cada uma está em [decisoes-e-alternativas.md](decisoes-e-alternativas.md).
+
+- **Escopo e ordem de execução.** Fechar o fluxo completo — publicar, reservar, pagar, emitir, compartilhar, validar — antes de abrir qualquer frente nova. Assentos marcados só depois do caminho principal pronto.
+- **Ingresso por quantidade primeiro**, entre as duas opções que o enunciado permitia.
+- **Consistência garantida no banco**, não na aplicação: lock pessimista na reserva e na validação do ingresso.
+- **`LISTEN/NOTIFY` em vez de Redis** para o tempo real, aceitando a ausência de durabilidade em troca de não adicionar um componente de infraestrutura.
+- **Um ticket por unidade comprada**, em vez de contador na reserva.
+- **Gateway de pagamento atrás de um contrato**, com o simulador como única implementação.
+- **QR assinado com segredo próprio e apenas hash persistido**, separado do segredo de sessão.
+- **JWT em `localStorage` no MVP**, com o custo em XSS assumido explicitamente e o caminho de evolução registrado.
+- **Modelagem relacional final**: entidades, constraints e o que cada tabela protege.
+- **Quais testes valem a pena**: concorrência real contra PostgreSQL em vez de cobertura ampla.
+- **Recusar a meta "nunca retornar 500"**, trocando por "nenhum 500 não tratado" — uma alegação que resiste a pergunta.
+
+## Onde a IA ajudou
+
+- Ler o roadmap e organizar a sequência de entregas.
+- Propor a estrutura inicial do repositório e o esqueleto dos módulos.
+- Escrever a maior parte do código de rotas, schemas, services e repositories a partir das decisões acima.
+- Consultar documentação oficial de FastAPI, SQLAlchemy, Alembic, Next.js e Ticketmaster.
+- Escrever os testes, incluindo os cenários concorrentes contra PostgreSQL real.
+- Redigir e revisar a documentação.
+- Diagnosticar problemas que consumiriam tempo: reuso de conexão entre event loops nos testes, estado antigo no *identity map* do SQLAlchemy depois de esperar por lock, e ordem de locks para evitar deadlock.
+- Auditar o tratamento de erros e capturar as telas de falha com Playwright.
+
+## Achados que surgiram da revisão assistida
+
+Vale registrar separadamente, porque são defeitos reais que uma revisão encontrou depois de o código estar "pronto":
+
+- **`FastAPI(debug=...)` derivava de `ENVIRONMENT`**, cujo padrão é `development`. Com `debug=True`, o Starlette responde o traceback completo — caminhos absolutos do disco incluídos — e ignora qualquer handler de erro registrado. Publicar sem definir a variável teria vazado o rastro de execução pela rede.
+- **Faltava handler para `Exception`**, então uma queda do banco quebrava o contrato de erro. O ramo que trataria isso existia, mas era código inalcançável.
+- **A suíte integrada só rodava uma vez por contêiner.** O `alembic downgrade base` recria uma constraint única que os próprios testes violam.
+- **`sslmode=require`**, formato que Neon e Supabase entregam, é recusado pelo asyncpg. Teria sido a primeira falha do deploy.
+- **Enums crus na interface**: `PENDING` no checkout e `ALREADY_USED` na portaria chegavam à tela sem tradução.
+
+## Limite
+
+Sugestão de IA é tratada como qualquer contribuição de código: passa por revisão antes de entrar. Nada foi aceito por vir pronto — o critério é entender o que faz e conseguir defender por quê.
+
+Credenciais reais, decisões de produto e a aprovação para avançar entre fases permaneceram sob controle do responsável pelo projeto.

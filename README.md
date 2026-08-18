@@ -6,6 +6,34 @@ Plataforma full-stack de eventos e ingressos do Desafio Elite Dev 2026. O MVP co
 
 O repositório contém o fluxo principal completo: autenticação JWT com RBAC, catálogo externo da Ticketmaster, publicação local de eventos, busca e filtros na agenda pública, reservas protegidas contra overselling, mapas de assentos em tempo real, pagamento e reembolso simulados, ingressos individuais com QR assinado, compartilhamento público somente leitura e validação transacional na portaria. O Next.js oferece experiências específicas para público, cliente, organizador e portaria.
 
+## O fluxo, em telas
+
+Prints capturados na aplicação em execução, pelo roteiro versionado em `scripts/screenshots/`.
+
+**Agenda pública** — eventos publicados, com busca e filtros.
+
+![Agenda pública](docs/images/fluxo/01-agenda-publica.png)
+
+**Checkout** — reserva confirmada e pagamento simulado. O estoque já está separado.
+
+![Checkout com pagamento simulado](docs/images/fluxo/03-checkout-pagamento.png)
+
+**Ingresso emitido** — código público para digitação e QR assinado, gerado sob demanda.
+
+![Ingresso com QR](docs/images/fluxo/04-ingresso-qr.png)
+
+**Portaria** — primeira leitura libera a entrada; a segunda do mesmo código responde que já foi utilizado.
+
+![Portaria liberando a entrada](docs/images/fluxo/05-portaria-liberado.png)
+
+![Portaria recusando ingresso já utilizado](docs/images/fluxo/06-portaria-ja-utilizado.png)
+
+E a tela que resume a decisão técnica central: a página mostra 95 ingressos disponíveis e o cliente pede exatamente 95, mas outro comprou enquanto a página estava aberta. Quem recusa é a transação no banco, não o formulário.
+
+![Checkout recusando quantidade acima do estoque real](docs/images/erros/409-ingressos-insuficientes.png)
+
+O catálogo completo de erros, com print de cada caso, está em [docs/erros.md](docs/erros.md).
+
 ## Arquitetura
 
 O projeto é um monólito modular com frontend e backend implantáveis separadamente:
@@ -27,7 +55,9 @@ Detalhes estão em [docs/architecture.md](docs/architecture.md).
 
 ## Decisões técnicas
 
-As decisões arquiteturais e seus trade-offs estão em [docs/decisions.md](docs/decisions.md).
+**[docs/decisoes-e-alternativas.md](docs/decisoes-e-alternativas.md)** registra cada decisão com a alternativa que foi descartada e o custo assumido: por que `SELECT FOR UPDATE` e não `UPDATE` condicional, por que `LISTEN/NOTIFY` e não Redis, por que SQLAlchemy assíncrono, como a dupla validação de QR é impedida.
+
+[docs/decisions.md](docs/decisions.md) descreve o comportamento implementado, tópico a tópico.
 
 ## Como executar
 
@@ -208,6 +238,39 @@ cd frontend
 npm run lint
 npm run build
 ```
+
+## Checklist de entrega
+
+| Item | Estado |
+|---|---|
+| Repositório público com commits distribuídos | Sim |
+| README reproduzível | Sim |
+| Organizador, dois clientes e portaria semeados | Sim |
+| Evento publicado com ingressos disponíveis | Sim — 5 eventos no seed |
+| Busca e navegação de eventos | Sim |
+| Reserva | Sim |
+| Pagamento aprovado e recusado | Sim |
+| Ingresso e QR | Sim |
+| Compartilhamento por link | Sim |
+| Portaria por câmera e por código manual | Sim |
+| `VALID`, `INVALID`, `ALREADY_USED`, `WRONG_EVENT` | Sim |
+| Proteção contra overselling no backend | Sim — `SELECT FOR UPDATE` + teste concorrente |
+| Proteção contra dupla validação no backend | Sim — `SELECT FOR UPDATE` + teste concorrente |
+| Testes críticos passando | Sim — 34 rápidos, 8 integrados |
+| Limitações conhecidas documentadas | Sim |
+| Uso de IA documentado | Sim |
+| Aplicação publicada | Pendente |
+
+## Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [docs/decisoes-e-alternativas.md](docs/decisoes-e-alternativas.md) | Cada decisão, a alternativa descartada e o custo assumido |
+| [docs/decisions.md](docs/decisions.md) | Comportamento implementado, por tópico |
+| [docs/architecture.md](docs/architecture.md) | Camadas e fluxo de uma requisição |
+| [docs/erros.md](docs/erros.md) | Os 51 códigos de erro e como cada um aparece na tela |
+| [docs/testing.md](docs/testing.md) | Estratégia de testes e as duas suítes |
+| [docs/ai-usage.md](docs/ai-usage.md) | O que foi decisão minha e o que foi execução assistida |
 
 ## Uso de IA
 
