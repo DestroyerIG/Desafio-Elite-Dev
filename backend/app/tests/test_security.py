@@ -110,25 +110,43 @@ def test_shared_ticket_token_is_redacted_from_access_log() -> None:
     assert record.args[2] == "/api/v1/shared-tickets/[REDACTED]/qr"
 
 
-def test_asyncpg_url_accepts_neon_connection_string() -> None:
-    """A URL publicada pelo Neon precisa funcionar sem edição manual.
+def test_neon_connection_string_works_verbatim() -> None:
+    """A URL do Neon, colada como está, precisa funcionar.
 
-    O SQLAlchemy repassa a query string como argumento nomeado para
-    asyncpg.connect(), que recusa a grafia do libpq com TypeError.
+    Sem o `+asyncpg` o SQLAlchemy escolhe psycopg2, que não está instalado, e o
+    processo morre no import. Com a grafia do libpq na query string, o asyncpg
+    recusa os argumentos e falha na conexão.
     """
     from app.core.config import Settings
 
     settings = Settings(
         database_url=(
-            "postgresql+asyncpg://u:p@ep-x.neon.tech/neondb"
+            "postgresql://neondb_owner:senha@ep-x.sa-east-1.aws.neon.tech/neondb"
             "?sslmode=require&channel_binding=require"
         ),
         environment="development",
     )
 
     assert settings.database_url == (
-        "postgresql+asyncpg://u:p@ep-x.neon.tech/neondb?ssl=require"
+        "postgresql+asyncpg://neondb_owner:senha@ep-x.sa-east-1.aws.neon.tech"
+        "/neondb?ssl=require"
     )
+
+
+def test_heroku_style_scheme_is_upgraded() -> None:
+    from app.core.config import Settings
+
+    settings = Settings(database_url="postgres://u:p@host/db")
+
+    assert settings.database_url.startswith("postgresql+asyncpg://")
+
+
+def test_explicit_driver_is_respected() -> None:
+    """Escolher outro driver de propósito não deve ser sobrescrito."""
+    from app.core.config import Settings
+
+    original = "postgresql+psycopg://u:p@host/db?sslmode=require"
+    assert Settings(database_url=original).database_url == original
 
 
 def test_asyncpg_url_drops_only_libpq_parameters() -> None:

@@ -51,22 +51,28 @@ class Settings(BaseSettings):
     def normalize_asyncpg_dsn(self) -> "Settings":
         """Aceita a string de conexão que os provedores gerenciados entregam.
 
-        Neon, Supabase e Render publicam a URL no dialeto do libpq, com
-        parâmetros como `sslmode=require&channel_binding=require`. O SQLAlchemy
-        repassa toda a query string como argumento nomeado para
-        `asyncpg.connect()`, que não conhece essa grafia e falha com
-        `TypeError: connect() got an unexpected keyword argument ...`.
+        Neon, Supabase, Render e Heroku publicam a URL no dialeto do libpq, que
+        difere do que o SQLAlchemy com asyncpg espera em dois pontos.
 
-        `sslmode` tem equivalente direto em `ssl`, então é renomeado preservando
-        o valor. Os demais parâmetros só do libpq são descartados: mantê-los
-        quebraria a conexão, e nenhum deles altera o comportamento do asyncpg,
-        que negocia TLS pelo próprio `ssl`.
+        O esquema vem como `postgresql://` ou `postgres://`. O SQLAlchemy
+        resolveria ambos para psycopg2, ausente do `requirements.txt` — o backend
+        é assíncrono de ponta a ponta e asyncpg é o único driver instalado. Sem a
+        correção o processo morre no import com `ModuleNotFoundError`.
+
+        A query string traz parâmetros como `sslmode` e `channel_binding`. O
+        SQLAlchemy os repassa como argumento nomeado para `asyncpg.connect()`,
+        que não conhece essa grafia e falha com `TypeError`. `sslmode` tem
+        equivalente direto em `ssl`; os demais parâmetros só do libpq são
+        descartados, pois nenhum altera o comportamento do asyncpg.
+
+        O resultado é que a URL do provedor funciona colada como está.
         """
-        if "+asyncpg" not in self.database_url:
-            return self
-
         partes = urlsplit(self.database_url)
-        if not partes.query:
+
+        if partes.scheme in {"postgres", "postgresql"}:
+            partes = partes._replace(scheme="postgresql+asyncpg")
+        elif not partes.scheme.endswith("+asyncpg"):
+            # Driver escolhido explicitamente: respeitar a intenção.
             return self
 
         aceitos = {
@@ -83,9 +89,7 @@ class Settings(BaseSettings):
             if chave in aceitos:
                 parametros.append((chave, valor))
 
-        self.database_url = urlunsplit(
-            partes._replace(query=urlencode(parametros))
-        )
+        self.database_url = urlunsplit(partes._replace(query=urlencode(parametros)))
         return self
 
     @model_validator(mode="after")
