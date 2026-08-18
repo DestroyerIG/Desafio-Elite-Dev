@@ -228,4 +228,11 @@ O uso de assistência por IA está descrito com transparência em [docs/ai-usage
 
 ## Melhorias futuras
 
-As próximas fases seguirão a ordem: testes e qualidade; entrega.
+- Expiração automática também para reservas por quantidade, devolvendo o estoque sem intervenção manual.
+- Revogação e expiração de links compartilhados pela interface; o schema já reserva `expires_at` e `revoked_at`.
+- Armazenamento de imagens em serviço externo (S3 ou R2) para permitir múltiplas instâncias do backend.
+- Sessão em cookie `HttpOnly` com proteção CSRF, ou um BFF, substituindo o token em `localStorage`.
+- Reembolso parcial e confirmação assíncrona de pagamento por webhook.
+- Testes de frontend com Vitest e React Testing Library nos fluxos de checkout e portaria.
+- CI no GitHub Actions executando lint, build e as duas suítes de teste a cada push.
+- Rate limiting e observabilidade (métricas e tracing) nos endpoints de reserva, pagamento e portaria.
